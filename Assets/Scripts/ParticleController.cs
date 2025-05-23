@@ -137,12 +137,12 @@ public class ParticleController : MonoBehaviour
         {
             Particle pi = particles[i];
             pi.density = 0f;
-
+            
             // 遍历所有粒子找到邻居粒子并计算密度
             foreach (Particle pj in particles)
             {
-                Vector3 particleDistance = pi.position - pj.position;
-                float radiusSquared = particleDistance.sqrMagnitude;
+                Vector3 particleVector_ij = pj.position - pi.position;
+                float radiusSquared = particleVector_ij.sqrMagnitude;
                 
                 if (radiusSquared < hSquared)
                 {
@@ -171,18 +171,18 @@ public class ParticleController : MonoBehaviour
         {
             Particle pi = particles[i];
             pi.acceleration = Vector3.zero;
-
+            
             // 计算压力和粘滞力加速度
             for (int j = 0; j < particles.Count; j++)
             {
                 if (i == j) continue;
 
                 Particle pj = particles[j];
-                Vector3 particleVector_ij = pi.position - pj.position;
+                Vector3 particleVector_ij = pj.position - pi.position;
                 float radiusSquared = particleVector_ij.sqrMagnitude;
 
                 if (!(radiusSquared < hSquared)) continue;
-                
+
                 // 计算压力梯度
                 Vector3 pressureAcceleration = particleMass * 
                                              (pi.pressure / (pi.density * pi.density) + pj.pressure / (pj.density * pj.density))
