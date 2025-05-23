@@ -205,8 +205,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: -0.086926796, y: 0.89934504, z: -0.20897275, w: -0.37410238}
+  m_LocalPosition: {x: 1.4588826, y: 0.9294073, z: 1.4586067}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -455,14 +455,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fedac8d2155c3459aa8ffb9e68a7ca43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxParticles: 40960
+  particleMass: 0.02
+  restDensityRho: 1000
+  gasConstantB: 2000
+  pressureExponentGamma: 7
+  viscosityMu: 0.05
+  gravity: {x: 0, y: -9.81, z: 0}
+  smoothingRadiusH: 0.1
+  boundaryDamping: 0.7
+  maxParticles: 2048
   spawnVolumeCenter: {x: 0, y: 0, z: 0}
-  spawnVolumeSize: {x: 2, y: 1, z: 2}
-  particleDisplayRadius: 0.2
-  particleColor: {r: 0, g: 0, b: 1, a: 1}
+  spawnVolumeSize: {x: 1, y: 1, z: 1}
   particleMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   particleMaterial: {fileID: 2100000, guid: 9dfc2958de33942a3a00347e26411adb, type: 2}
-  particleRenderScale: 0.02
+  particleRenderScale: 0.01
 --- !u!4 &1624591210
 Transform:
   m_ObjectHideFlags: 0
