@@ -435,6 +435,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1624591210}
+  - component: {fileID: 1624591211}
   - component: {fileID: 1624591209}
   m_Layer: 0
   m_Name: Logic
@@ -450,7 +451,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1624591208}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fedac8d2155c3459aa8ffb9e68a7ca43, type: 3}
   m_Name: 
@@ -484,6 +485,33 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1624591211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1624591208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02dd3f796abd8014fb04310498e5ada9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  particleComputeShader: {fileID: 7200000, guid: 0a7710131453b5b4790d8103dc20916f, type: 3}
+  particleMass: 0.02
+  restDensityRho: 100
+  gasConstantB: 2000
+  pressureExponentGamma: 7
+  viscosityMu: 0.3
+  gravity: {x: 0, y: -9.81, z: 0}
+  smoothingRadiusH: 0.1
+  boundaryDamping: 1
+  maxParticles: 4096
+  spawnVolumeCenter: {x: 0, y: 0, z: 0}
+  spawnVolumeSize: {x: 1, y: 1, z: 1}
+  particleMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  particleMaterial: {fileID: 2100000, guid: 9dfc2958de33942a3a00347e26411adb, type: 2}
+  particleRenderScale: 0.01
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

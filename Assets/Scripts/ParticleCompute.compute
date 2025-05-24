@@ -1,0 +1,203 @@
+/// 内核定义
+// 密度计算内核
+#pragma kernel CSComputeDensity
+// 压力计算内核
+#pragma kernel CSComputePressure
+// 合力计算内核
+#pragma kernel CSComputeForce
+// 最终计算和边界处理内核
+#pragma kernel CSIntegrate
+
+/// 粒子结构
+struct ParticleGPUData {
+    float3 position;
+    float3 velocity;
+    float3 acceleration;
+    float density;
+    float pressure;
+};
+
+/// 参数全部按照 C# 脚本设置
+RWStructuredBuffer<ParticleGPUData> _Particles;
+// 模拟参数
+uint _MaxParticles;             // 粒子数量
+float _ParticleMass;            // 粒子模拟质量
+float _RestDensityRho;          // 静止密度 rho
+float _GasConstantB;            // Tait 状态方程中的流体刚度系数
+float _PressureExponentGamma;   // Tait 状态方程中的指数
+float _ViscosityMu;             // 动力粘滞系数
+float3 _Gravity;                // 重力加速度
+float _SmoothingRadiusH;        // 平滑核影响半径 h
+float _HSquared;                // h^2
+// 常数参数
+float _Poly6Constant;               // Poly6 核函数常数
+float _SpikyGradientConstant;       // Spiky 梯度核函数常数
+float _ViscosityLaplacianConstant;  // Viscosity Laplacian 核函数常数
+// 其他参数
+float _DeltaTime;           // 时间步长
+float _BoundaryDamping;     // 边界阻尼系数
+float3 _SpawnVolumeCenter;  // 粒子生成体积中心
+float3 _SpawnVolumeSize;    // 粒子生成体积大小
+
+/// 常用函数
+// 计算 Poly6 核函数
+float Poly6Kernel(float radiusSquared)
+{
+    if (radiusSquared >= _HSquared) return 0.0f;
+    
+    float diff = _HSquared - radiusSquared;
+    return _Poly6Constant * diff * diff * diff;
+}
+
+// 计算 Spiky 梯度核函数
+float3 SpikyGradientKernel(float3 radiusVector)
+{
+    float radius = length(radiusVector);
+    if (radius >= _SmoothingRadiusH) return float3(0.0f, 0.0f, 0.0f);
+    
+    float factor = _SpikyGradientConstant * pow(_SmoothingRadiusH - radius, 2);
+    return factor * normalize(radiusVector);
+}
+
+// 计算 Viscosity Laplacian 核函数
+float ViscosityLaplacianKernel(float radius)
+{
+    if (radius >= _SmoothingRadiusH) return 0.0f;
+    
+    return _ViscosityLaplacianConstant * (_SmoothingRadiusH - radius);
+}
+
+/// 内核函数
+// 密度计算函数
+[numthreads(64,1,1)]
+void CSComputeDensity (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _MaxParticles) return;
+
+    _Particles[i].density = 0.0f;
+    float3 pos_i = _Particles[i].position;
+    
+    for (uint j = 0; j < _MaxParticles; ++j)
+    {
+        float3 positionVector_ij = _Particles[j].position - pos_i;
+        float radiusSquared = dot(positionVector_ij, positionVector_ij);
+        
+        if (radiusSquared < _HSquared)
+        {
+            _Particles[i].density += _ParticleMass * Poly6Kernel(radiusSquared);
+        }
+    }
+    
+    if (_Particles[i].density < 0.0001f)
+    {
+        _Particles[i].density = _RestDensityRho;
+    }
+}
+
+// 压力计算函数
+[numthreads(64,1,1)]
+void CSComputePressure (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _MaxParticles) return;
+
+    float currentDensity = _Particles[i].density;
+
+    float pressure = _GasConstantB * (pow(max(0.0f, currentDensity / _RestDensityRho), _PressureExponentGamma) - 1.0f);
+
+    _Particles[i].pressure = max(0.0f, pressure);
+}
+
+// 合力计算函数
+[numthreads(64,1,1)]
+void CSComputeForce (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _MaxParticles) return;
+    
+    float3 pos_i = _Particles[i].position;
+    float density_i = _Particles[i].density;
+    float pressure_i = _Particles[i].pressure;
+    float3 velocity_i = _Particles[i].velocity;
+    
+    for (uint j = 0; j < _MaxParticles; ++j)
+    {
+        if (i == j) continue;
+
+        float density_j = _Particles[j].density;
+        float pressure_j = _Particles[j].pressure;
+        float3 velocity_j = _Particles[j].velocity;
+        
+        float3 positionVector_ij = _Particles[j].position - pos_i;
+        float radiusSquared = dot(positionVector_ij, positionVector_ij);
+        
+        if (radiusSquared < _HSquared && radiusSquared > 0.0001f)
+        {
+            float radius = sqrt(radiusSquared);
+
+            float3 pressureAcceleration = _ParticleMass *
+                (pressure_i / (density_i * density_i) + pressure_j / (density_j * density_j)) *
+                    SpikyGradientKernel(positionVector_ij);
+
+            float3 viscosityAcceleration = (velocity_j - velocity_i) *
+                (_ViscosityMu * _ParticleMass / (density_i * density_j) *
+                    ViscosityLaplacianKernel(radius));
+
+            _Particles[i].acceleration += pressureAcceleration + viscosityAcceleration;
+        }
+    }
+
+    _Particles[i].acceleration += _Gravity;
+}
+
+// 最终计算和边界处理函数
+[numthreads(64,1,1)]
+void CSIntegrate (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+
+    if (i >= _MaxParticles) return;
+    
+    float3 currentPosition = _Particles[i].position;
+    float3 currentVelocity = _Particles[i].velocity;
+    float3 currentAcceleration = _Particles[i].acceleration;
+
+    // 更新速度
+    currentVelocity += currentAcceleration * _DeltaTime;
+
+    // 更新位置
+    currentPosition += currentVelocity * _DeltaTime;
+
+    // 处理边界条件
+    float3 minBounds = _SpawnVolumeCenter - _SpawnVolumeSize / 2.0f;
+    float3 maxBounds = _SpawnVolumeCenter + _SpawnVolumeSize / 2.0f;
+
+    // X 轴
+    if (currentPosition.x < minBounds.x) {
+        currentPosition.x = minBounds.x;
+        currentVelocity.x *= -_BoundaryDamping;
+    } else if (currentPosition.x > maxBounds.x) {
+        currentPosition.x = maxBounds.x;
+        currentVelocity.x *= -_BoundaryDamping;
+    }
+
+    // Y 轴 (仅下方边界)
+    if (currentPosition.y < minBounds.y) {
+        currentPosition.y = minBounds.y;
+        currentVelocity.y *= -_BoundaryDamping;
+    }
+
+    // Z 轴
+    if (currentPosition.z < minBounds.z) {
+        currentPosition.z = minBounds.z;
+        currentVelocity.z *= -_BoundaryDamping;
+    } else if (currentPosition.z > maxBounds.z) {
+        currentPosition.z = maxBounds.z;
+        currentVelocity.z *= -_BoundaryDamping;
+    }
+
+    // 完成
+    _Particles[i].position = currentPosition;
+    _Particles[i].velocity = currentVelocity;
+}

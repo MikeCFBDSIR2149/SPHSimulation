@@ -5,7 +5,7 @@ using Random = UnityEngine.Random;
 
 public class ParticleController : MonoBehaviour
 {
-    public struct Particle
+    private struct Particle
     {
         public Vector3 position;
         public Vector3 velocity;
