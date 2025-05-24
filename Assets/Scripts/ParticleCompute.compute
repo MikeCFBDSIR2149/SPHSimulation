@@ -102,7 +102,7 @@ void CSComputePressure (uint3 id : SV_DispatchThreadID)
     uint i = id.x;
     if (i >= _MaxParticles) return;
 
-    float currentDensity = _Particles[i].density;
+    float currentDensity = max(_Particles[i].density, 1e-4f);
 
     float pressure = _GasConstantB * (pow(max(0.0f, currentDensity / _RestDensityRho), _PressureExponentGamma) - 1.0f);
 
@@ -115,6 +115,8 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
     if (i >= _MaxParticles) return;
+
+    _Particles[i].acceleration = float3(0.0f, 0.0f, 0.0f);
     
     float3 pos_i = _Particles[i].position;
     float density_i = _Particles[i].density;
@@ -132,7 +134,7 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
         float3 positionVector_ij = _Particles[j].position - pos_i;
         float radiusSquared = dot(positionVector_ij, positionVector_ij);
         
-        if (radiusSquared < _HSquared && radiusSquared > 0.0001f)
+        if (radiusSquared < _HSquared)
         {
             float radius = sqrt(radiusSquared);
 
@@ -143,12 +145,17 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
             float3 viscosityAcceleration = (velocity_j - velocity_i) *
                 (_ViscosityMu * _ParticleMass / (density_i * density_j) *
                     ViscosityLaplacianKernel(radius));
-
+            
             _Particles[i].acceleration += pressureAcceleration + viscosityAcceleration;
         }
     }
 
+    if (isnan(_Particles[i].acceleration.x) || isnan(_Particles[i].acceleration.y) || isnan(_Particles[i].acceleration.z)) {
+        _Particles[i].acceleration = float3(0, 0, 0);
+    }
+    
     _Particles[i].acceleration += _Gravity;
+    _Particles[i].acceleration *= 0.9;
 }
 
 // 最终计算和边界处理函数

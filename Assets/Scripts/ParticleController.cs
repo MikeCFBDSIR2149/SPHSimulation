@@ -51,6 +51,7 @@ public class ParticleController : MonoBehaviour
 
     private void Start()
     {
+        // Time.timeScale = 10;
         PreCalculateConstants();
         InitializeParticles();
     }

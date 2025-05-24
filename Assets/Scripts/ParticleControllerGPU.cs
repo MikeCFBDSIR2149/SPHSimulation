@@ -73,15 +73,25 @@ public class ParticleControllerGPU : MonoBehaviour
     
     private void Start()
     {
+        // Time.timeScale = 100f;
         PreCalculateConstants();
         InitializeParticlesCPU();
         InitializeComputeShader();
     }
 
-    private void FixedUpdate()
+    private void Update()
     {
         if (particleBuffer == null || !particleComputeShader) return;
         
+        particleComputeShader.SetFloat(DeltaTime, Time.deltaTime);
+        
+        particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
+        particleComputeShader.SetFloat(GasConstantB, gasConstantB);
+        particleComputeShader.SetFloat(PressureExponentGamma, pressureExponentGamma);
+        particleComputeShader.SetFloat(ViscosityMu, viscosityMu);
+        particleComputeShader.SetVector(Gravity, gravity);
+        particleComputeShader.SetFloat(SmoothingRadiusH, smoothingRadiusH);
+        particleComputeShader.SetFloat(HSquared, smoothingRadiusH * smoothingRadiusH);
         int numGroupsX = (maxParticles + threadsPerGroupX - 1) / threadsPerGroupX;
         
         particleComputeShader.Dispatch(csDensityKernelID, numGroupsX, 1, 1);
@@ -90,6 +100,11 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.Dispatch(csIntegrateKernelID, numGroupsX, 1, 1);
         
         particleBuffer.GetData(particleDataArray);
+        // Debug.Log("Position:" + particleDataArray[0].position + 
+        //           " Velocity:" + particleDataArray[0].velocity + 
+        //           " Acceleration:" + particleDataArray[0].acceleration + 
+        //           " Density:" + particleDataArray[0].density + 
+        //           " Pressure:" + particleDataArray[0].pressure);
     }
     
     private void PreCalculateConstants()
@@ -168,7 +183,6 @@ public class ParticleControllerGPU : MonoBehaviour
             particleComputeShader.SetFloat(Poly6Constant, poly6Constant);
             particleComputeShader.SetFloat(SpikyGradientConstant, spikyGradientConstant);
             particleComputeShader.SetFloat(ViscosityLaplacianConstant, viscosityLaplacianConstant);
-            particleComputeShader.SetFloat(DeltaTime, Time.fixedDeltaTime);
             particleComputeShader.SetFloat(BoundaryDamping, boundaryDamping);
             particleComputeShader.SetVector(SpawnVolumeCenter, spawnVolumeCenter);
             particleComputeShader.SetVector(SpawnVolumeSize, spawnVolumeSize);
@@ -235,4 +249,14 @@ public class ParticleControllerGPU : MonoBehaviour
         particleBuffer.Release();
         particleBuffer = null;
     }
+
+    #region Debug
+    public void DebugParticleTransforms()
+    {
+        for (int i = 0; i < maxParticles; i++)
+        {
+            Debug.Log($"Particle {i}: Position = {particleDataArray[i].position}, Velocity = {particleDataArray[i].velocity}");
+        }
+    }
+    #endregion
 }
