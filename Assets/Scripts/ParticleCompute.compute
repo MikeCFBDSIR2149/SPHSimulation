@@ -7,6 +7,9 @@
 #pragma kernel CSComputeForce
 // 最终计算和边界处理内核
 #pragma kernel CSIntegrate
+/// 性能优化
+// GPU 粒子构建内核
+#pragma kernel CSBuildMatrices
 
 /// 粒子结构
 struct ParticleGPUData {
@@ -38,6 +41,14 @@ float _DeltaTime;           // 时间步长
 float _BoundaryDamping;     // 边界阻尼系数
 float3 _SpawnVolumeCenter;  // 粒子生成体积中心
 float3 _SpawnVolumeSize;    // 粒子生成体积大小
+
+struct MeshProperties
+{
+    float4x4 mat;
+};
+RWStructuredBuffer<MeshProperties> _Properties;
+
+float _ParticleRenderScale;
 
 /// 常用函数
 // 计算 Poly6 核函数
@@ -208,3 +219,19 @@ void CSIntegrate (uint3 id : SV_DispatchThreadID)
     _Particles[i].position = currentPosition;
     _Particles[i].velocity = currentVelocity;
 }
+
+[numthreads(64,1,1)]
+void CSBuildMatrices(uint id : SV_DispatchThreadID)
+{
+    if (id >= _MaxParticles) return;
+    float3 pos = _Particles[id].position;
+    float scale = _ParticleRenderScale;
+    float4x4 mat = float4x4(
+        float4(scale, 0,     0,     pos.x), // 第 1 行
+        float4(0,     scale, 0,     pos.y), // 第 2 行
+        float4(0,     0,     scale, pos.z), // 第 3 行
+        float4(0,     0,     0,     1)      // 第 4 行
+    );
+    _Properties[id].mat = mat;
+}
+

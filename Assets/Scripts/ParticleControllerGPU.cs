@@ -14,6 +14,12 @@ public class ParticleControllerGPU : MonoBehaviour
         public float pressure;
     }
     
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MeshProperties
+    {
+        public Matrix4x4 mat;
+    }
+    
     [Header("GPU Compute")]
     public ComputeShader particleComputeShader;
     private ComputeBuffer particleBuffer;
@@ -40,7 +46,15 @@ public class ParticleControllerGPU : MonoBehaviour
     private static readonly int BoundaryDamping = Shader.PropertyToID("_BoundaryDamping");
     private static readonly int SpawnVolumeCenter = Shader.PropertyToID("_SpawnVolumeCenter");
     private static readonly int SpawnVolumeSize = Shader.PropertyToID("_SpawnVolumeSize");
-    
+    // 性能优化区域
+    private ComputeBuffer propertiesBuffer;
+    private ComputeBuffer argsBuffer;        // 用于DrawMeshInstancedIndirect参数
+    private MeshProperties[] meshPropertiesArray;
+    private int csBuildMatricesKernelID;
+    private static readonly int ParticleRenderScale = Shader.PropertyToID("_ParticleRenderScale");
+    private static readonly int Properties = Shader.PropertyToID("_Properties");
+
+
     // Parameters
     [Header("Parameters")]
     public float particleMass = 0.02f;          // 粒子模拟质量
@@ -63,15 +77,13 @@ public class ParticleControllerGPU : MonoBehaviour
     public Mesh particleMesh;
     public Material particleMaterial;
     public float particleRenderScale;
-
-    private Matrix4x4[] particleMatrices;
     
     // Kernel Constant (核函数常数)
     private float poly6Constant;
     private float spikyGradientConstant;
     private float viscosityLaplacianConstant;
     
-    private void Start()
+    private void OnEnable()
     {
         // Time.timeScale = 100f;
         PreCalculateConstants();
@@ -79,11 +91,9 @@ public class ParticleControllerGPU : MonoBehaviour
         InitializeComputeShader();
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
         if (particleBuffer == null || !particleComputeShader) return;
-        
-        particleComputeShader.SetFloat(DeltaTime, Time.deltaTime);
         
         particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
         particleComputeShader.SetFloat(GasConstantB, gasConstantB);
@@ -99,7 +109,10 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.Dispatch(csForceKernelID, numGroupsX, 1, 1);
         particleComputeShader.Dispatch(csIntegrateKernelID, numGroupsX, 1, 1);
         
-        particleBuffer.GetData(particleDataArray);
+        particleComputeShader.SetFloat(ParticleRenderScale, particleRenderScale);
+        particleComputeShader.Dispatch(csBuildMatricesKernelID, numGroupsX, 1, 1);
+        
+        // particleBuffer.GetData(particleDataArray);
         // Debug.Log("Position:" + particleDataArray[0].position + 
         //           " Velocity:" + particleDataArray[0].velocity + 
         //           " Acceleration:" + particleDataArray[0].acceleration + 
@@ -118,13 +131,13 @@ public class ParticleControllerGPU : MonoBehaviour
     private void InitializeParticlesCPU()
     {
         particleDataArray = new ParticleGPU[maxParticles]; 
-        particleMatrices = new Matrix4x4[maxParticles];
+        meshPropertiesArray = new MeshProperties[maxParticles];
         
         for (int i = 0; i < maxParticles; i++)
         {
-            float x = Random.Range(-spawnVolumeSize.x / 2f, spawnVolumeSize.x / 2f);
+            float x = Random.Range(0, spawnVolumeSize.x / 2f);
             float y = Random.Range(-spawnVolumeSize.y / 2f, spawnVolumeSize.y / 2f);
-            float z = Random.Range(-spawnVolumeSize.z / 2f, spawnVolumeSize.z / 2f);
+            float z = Random.Range(-spawnVolumeSize.z / 2f, 0);
 
             Vector3 initialPosition = spawnVolumeCenter + new Vector3(x, y, z);
 
@@ -136,12 +149,11 @@ public class ParticleControllerGPU : MonoBehaviour
                 density = 0f,
                 pressure = 0f,
             };
-
-            particleMatrices[i] = Matrix4x4.TRS(
-                initialPosition,
-                Quaternion.identity,
-                Vector3.one * particleRenderScale
-            );
+            
+            Vector3 pos = initialPosition;
+            float scale = particleRenderScale;
+            Matrix4x4 mat = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * scale);
+            meshPropertiesArray[i].mat = mat;
         }
     }
 
@@ -157,97 +169,107 @@ public class ParticleControllerGPU : MonoBehaviour
         particleBuffer = new ComputeBuffer(maxParticles, particleStructSize);
         particleBuffer.SetData(particleDataArray);
 
-        if (particleComputeShader)
-        {
-            csDensityKernelID = particleComputeShader.FindKernel("CSComputeDensity");
-            csPressureKernelID = particleComputeShader.FindKernel("CSComputePressure");
-            csForceKernelID = particleComputeShader.FindKernel("CSComputeForce");
-            csIntegrateKernelID = particleComputeShader.FindKernel("CSIntegrate");
-            
-            // 绑定 ComputeBuffer
-            particleComputeShader.SetBuffer(csDensityKernelID, Particles, particleBuffer);
-            particleComputeShader.SetBuffer(csPressureKernelID, Particles, particleBuffer);
-            particleComputeShader.SetBuffer(csForceKernelID, Particles, particleBuffer);
-            particleComputeShader.SetBuffer(csIntegrateKernelID, Particles, particleBuffer);
-            
-            // 设置 Compute Shader 常量参数
-            particleComputeShader.SetInt(MaxParticles, maxParticles);
-            particleComputeShader.SetFloat(ParticleMass, particleMass);
-            particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
-            particleComputeShader.SetFloat(GasConstantB, gasConstantB);
-            particleComputeShader.SetFloat(PressureExponentGamma, pressureExponentGamma);
-            particleComputeShader.SetFloat(ViscosityMu, viscosityMu);
-            particleComputeShader.SetVector(Gravity, gravity);
-            particleComputeShader.SetFloat(SmoothingRadiusH, smoothingRadiusH);
-            particleComputeShader.SetFloat(HSquared, hSquared);
-            particleComputeShader.SetFloat(Poly6Constant, poly6Constant);
-            particleComputeShader.SetFloat(SpikyGradientConstant, spikyGradientConstant);
-            particleComputeShader.SetFloat(ViscosityLaplacianConstant, viscosityLaplacianConstant);
-            particleComputeShader.SetFloat(BoundaryDamping, boundaryDamping);
-            particleComputeShader.SetVector(SpawnVolumeCenter, spawnVolumeCenter);
-            particleComputeShader.SetVector(SpawnVolumeSize, spawnVolumeSize);
-        }
-        else
-        {
-            Debug.LogError("Compute Shader NULL!");
-        }
+        if (!particleComputeShader) Debug.LogError("Particle compute shader not initialized!");
+        
+        csDensityKernelID = particleComputeShader.FindKernel("CSComputeDensity");
+        csPressureKernelID = particleComputeShader.FindKernel("CSComputePressure");
+        csForceKernelID = particleComputeShader.FindKernel("CSComputeForce");
+        csIntegrateKernelID = particleComputeShader.FindKernel("CSIntegrate");
+        
+        // 绑定 ComputeBuffer
+        particleComputeShader.SetBuffer(csDensityKernelID, Particles, particleBuffer);
+        particleComputeShader.SetBuffer(csPressureKernelID, Particles, particleBuffer);
+        particleComputeShader.SetBuffer(csForceKernelID, Particles, particleBuffer);
+        particleComputeShader.SetBuffer(csIntegrateKernelID, Particles, particleBuffer);
+        
+        // 设置 Compute Shader 常量参数
+        particleComputeShader.SetInt(MaxParticles, maxParticles);
+        particleComputeShader.SetFloat(ParticleMass, particleMass);
+        particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
+        particleComputeShader.SetFloat(GasConstantB, gasConstantB);
+        particleComputeShader.SetFloat(PressureExponentGamma, pressureExponentGamma);
+        particleComputeShader.SetFloat(ViscosityMu, viscosityMu);
+        particleComputeShader.SetVector(Gravity, gravity);
+        particleComputeShader.SetFloat(SmoothingRadiusH, smoothingRadiusH);
+        particleComputeShader.SetFloat(HSquared, hSquared);
+        
+        particleComputeShader.SetFloat(Poly6Constant, poly6Constant);
+        particleComputeShader.SetFloat(SpikyGradientConstant, spikyGradientConstant);
+        particleComputeShader.SetFloat(ViscosityLaplacianConstant, viscosityLaplacianConstant);
+        
+        particleComputeShader.SetFloat(DeltaTime, Time.fixedDeltaTime);
+        particleComputeShader.SetFloat(BoundaryDamping, boundaryDamping);
+        particleComputeShader.SetVector(SpawnVolumeCenter, spawnVolumeCenter);
+        particleComputeShader.SetVector(SpawnVolumeSize, spawnVolumeSize);
+        
+        // 性能优化部分
+        csBuildMatricesKernelID = particleComputeShader.FindKernel("CSBuildMatrices");
+        
+        propertiesBuffer = new ComputeBuffer(maxParticles, Marshal.SizeOf(typeof(MeshProperties)), ComputeBufferType.Structured);
+        propertiesBuffer.SetData(meshPropertiesArray);
+
+        // 初始化DrawMeshInstancedIndirect用的参数buffer
+        argsBuffer?.Release();
+        uint[] args = {
+            particleMesh.GetIndexCount(0),
+            (uint)maxParticles,
+            particleMesh.GetIndexStart(0),
+            particleMesh.GetBaseVertex(0),
+            0
+        };
+        argsBuffer = new ComputeBuffer(1, args.Length * sizeof(uint), ComputeBufferType.IndirectArguments);
+        argsBuffer.SetData(args);
+        
+        particleComputeShader.SetBuffer(csBuildMatricesKernelID, Particles, particleBuffer);
+        particleComputeShader.SetBuffer(csBuildMatricesKernelID, Properties, propertiesBuffer);
     }
 
     private void LateUpdate()
-    {
-        if (particleDataArray == null || particleBuffer == null || !particleMesh || !particleMaterial) return; // 增加了 particleDataArray 的检查
+    { 
+        if (propertiesBuffer == null || !particleMaterial || !particleMesh || argsBuffer == null) return;
         
-        for (int i = 0; i < maxParticles; i++)
-        {
-            particleMatrices[i] = Matrix4x4.TRS(
-                particleDataArray[i].position,
-                Quaternion.identity,
-                Vector3.one * particleRenderScale
-            );
-        }
+        particleMaterial.SetBuffer(Properties, propertiesBuffer);
+        
+        Bounds bounds = new Bounds(spawnVolumeCenter, spawnVolumeSize * 2f);
+
+        Graphics.DrawMeshInstancedIndirect(
+            particleMesh,
+            0,
+            particleMaterial,
+            bounds,
+            argsBuffer
+        );
+    }
+
+    private void OnDisable()
+    {
+        ClearBuffers();
+    }
     
-        // Unity Documentation: DrawMeshInstanced 一次最多绘制 1023 个实例
-        const int maxInstancesPerCall = 1023;
-        // Debug.Log("The first particle acceleration: " + particleDataArray[0].acceleration);
-
-        if (maxParticles <= maxInstancesPerCall)
-        {
-            Graphics.DrawMeshInstanced(
-                particleMesh,
-                0,
-                particleMaterial,
-                particleMatrices,
-                maxParticles
-            );
-            return;
-        }
-
-        // 数量超限批处理
-        int numBatches = (maxParticles + maxInstancesPerCall - 1) / maxInstancesPerCall;
-        for (int batchIndex = 0; batchIndex < numBatches; batchIndex++)
-        {
-            int startIndex = batchIndex * maxInstancesPerCall;
-            int countInBatch = Mathf.Min(maxInstancesPerCall, maxParticles - startIndex);
-
-            Matrix4x4[] batchMatrices = new Matrix4x4[countInBatch];
-            System.Array.Copy(particleMatrices, startIndex, batchMatrices, 0, countInBatch);
-
-            Graphics.DrawMeshInstanced(
-                particleMesh,
-                0,
-                particleMaterial,
-                batchMatrices,
-                countInBatch
-            );
-        }
+    private void OnDestroy()
+    {
+        ClearBuffers();
     }
 
     // OnDestroy 释放 ComputeBuffer
-    private void OnDestroy()
+    private void ClearBuffers()
     {
-        if (particleBuffer == null) return;
-        particleBuffer.Release();
-        particleBuffer = null;
+        if (particleBuffer != null)
+        {
+            particleBuffer.Release();
+            particleBuffer = null;
+        }
+        if (propertiesBuffer != null)
+        {
+            propertiesBuffer.Release();
+            propertiesBuffer = null;
+        }
+        if (argsBuffer != null) 
+        { 
+            argsBuffer.Release();
+            argsBuffer = null;
+            
+        }
     }
 
     #region Debug
@@ -257,6 +279,12 @@ public class ParticleControllerGPU : MonoBehaviour
         {
             Debug.Log($"Particle {i}: Position = {particleDataArray[i].position}, Velocity = {particleDataArray[i].velocity}");
         }
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireCube(spawnVolumeCenter, spawnVolumeSize);
     }
     #endregion
 }
