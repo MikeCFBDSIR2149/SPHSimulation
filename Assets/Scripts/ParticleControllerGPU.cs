@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -12,6 +13,7 @@ public class ParticleControllerGPU : MonoBehaviour
         public Vector3 acceleration;
         public float density;
         public float pressure;
+        public int type; // 0: fluid, 1: boundary
     }
     
     [StructLayout(LayoutKind.Sequential)]
@@ -23,6 +25,8 @@ public class ParticleControllerGPU : MonoBehaviour
     [Header("GPU Compute")]
     public ComputeShader particleComputeShader;
     private ComputeBuffer particleBuffer;
+    private ComputeBuffer propertiesBuffer;
+    private ComputeBuffer argsBuffer;
     private ParticleGPU[] particleDataArray;
     private const int threadsPerGroupX = 64; // numthreads in compute shader
     private int csDensityKernelID;
@@ -46,9 +50,7 @@ public class ParticleControllerGPU : MonoBehaviour
     private static readonly int BoundaryDamping = Shader.PropertyToID("_BoundaryDamping");
     private static readonly int SpawnVolumeCenter = Shader.PropertyToID("_SpawnVolumeCenter");
     private static readonly int SpawnVolumeSize = Shader.PropertyToID("_SpawnVolumeSize");
-    // 性能优化区域
-    private ComputeBuffer propertiesBuffer;
-    private ComputeBuffer argsBuffer;        // 用于DrawMeshInstancedIndirect参数
+
     private MeshProperties[] meshPropertiesArray;
     private int csBuildMatricesKernelID;
     private static readonly int ParticleRenderScale = Shader.PropertyToID("_ParticleRenderScale");
@@ -70,10 +72,13 @@ public class ParticleControllerGPU : MonoBehaviour
     // Settings
     [Header("Settings")]
     public int maxParticles;
+    private int actualParticles;
+    public int boundaryLayers = 4; // 边界层数
+    public float spacingParameter = 1.8f; // 粒子间距参数，影响粒子分布密度
     public Vector3 spawnVolumeCenter = Vector3.zero;
     public Vector3 spawnVolumeSize;
     
-    [Header("Rendering Settings (Instanced)")]
+    [Header("Rendering Settings")]
     public Mesh particleMesh;
     public Material particleMaterial;
     public float particleRenderScale;
@@ -102,7 +107,7 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.SetVector(Gravity, gravity);
         particleComputeShader.SetFloat(SmoothingRadiusH, smoothingRadiusH);
         particleComputeShader.SetFloat(HSquared, smoothingRadiusH * smoothingRadiusH);
-        int numGroupsX = (maxParticles + threadsPerGroupX - 1) / threadsPerGroupX;
+        int numGroupsX = (actualParticles + threadsPerGroupX - 1) / threadsPerGroupX;
         
         particleComputeShader.Dispatch(csDensityKernelID, numGroupsX, 1, 1);
         particleComputeShader.Dispatch(csPressureKernelID, numGroupsX, 1, 1);
@@ -130,29 +135,93 @@ public class ParticleControllerGPU : MonoBehaviour
     
     private void InitializeParticlesCPU()
     {
-        particleDataArray = new ParticleGPU[maxParticles]; 
-        meshPropertiesArray = new MeshProperties[maxParticles];
+        List<ParticleGPU> particles = new List<ParticleGPU>();
+
+        float spacing = smoothingRadiusH / spacingParameter; // 粒子间距
         
-        for (int i = 0; i < maxParticles; i++)
+        Vector3 minBounds = spawnVolumeCenter - spawnVolumeSize / 2f;
+        Vector3 maxBounds = spawnVolumeCenter + spawnVolumeSize / 2f;
+        
+        // Debug.Log($"Bounds: Min={minBounds}, Max={maxBounds}");
+        // Debug.Log($"Spacing: {spacing}, Layers: {boundaryLayers}");
+        
+        float boundaryExtent = (boundaryLayers - 1) * spacing; // 边界向外延伸的距离
+
+        // 底部
+        for (int l = 0; l < boundaryLayers; l++) {
+            float y = minBounds.y - l * spacing;
+            for (float x = minBounds.x - boundaryExtent; x <= maxBounds.x + boundaryExtent; x += spacing) {
+                for (float z = minBounds.z - boundaryExtent; z <= maxBounds.z + boundaryExtent; z += spacing) {
+                   particles.Add(new ParticleGPU { position = new Vector3(x, y, z), type = 1 });
+                }
+            }
+        }
+
+        // int startBoundaryCount = particles.Count;
+        // Debug.Log($"Bottom boundary particles: {startBoundaryCount}");
+
+        // 四周边界
+        for (float y = minBounds.y + spacing; y <= maxBounds.y; y += spacing) {
+             for (int l = 0; l < boundaryLayers; l++) {
+                 // X-
+                 float x_neg = minBounds.x - l * spacing;
+                 for (float z = minBounds.z - boundaryExtent; z <= maxBounds.z + boundaryExtent; z += spacing) {
+                     particles.Add(new ParticleGPU { position = new Vector3(x_neg, y, z), type = 1 });
+                 }
+                 // X+
+                 float x_pos = maxBounds.x + l * spacing;
+                 for (float z = minBounds.z - boundaryExtent; z <= maxBounds.z + boundaryExtent; z += spacing) {
+                     particles.Add(new ParticleGPU { position = new Vector3(x_pos, y, z), type = 1 });
+                 }
+                 // Z-
+                 float z_neg = minBounds.z - l * spacing;
+                 for (float x = minBounds.x + spacing; x <= maxBounds.x - spacing; x += spacing) {
+                     particles.Add(new ParticleGPU { position = new Vector3(x, y, z_neg), type = 1 });
+                 }
+                 // Z+
+                 float z_pos = maxBounds.z + l * spacing;
+                  for (float x = minBounds.x + spacing; x <= maxBounds.x - spacing; x += spacing) {
+                     particles.Add(new ParticleGPU { position = new Vector3(x, y, z_pos), type = 1 });
+                 }
+             }
+        }
+        // int boundaryCount = particles.Count;
+        // Debug.Log($"Total boundary particles: {boundaryCount}");
+        
+        int fluidCount = 0;
+        while (fluidCount < maxParticles)
         {
-            float x = Random.Range(0, spawnVolumeSize.x / 2f);
-            float y = Random.Range(-spawnVolumeSize.y / 2f, spawnVolumeSize.y / 2f);
-            float z = Random.Range(-spawnVolumeSize.z / 2f, 0);
+            float buffer = spacing * 0.2f; // 防止生成在边界上
+            float x = Random.Range(buffer, maxBounds.x - buffer);
+            float y = Random.Range(minBounds.y + buffer, maxBounds.y - buffer);
+            float z = Random.Range(minBounds.z + buffer, - buffer);
 
-            Vector3 initialPosition = spawnVolumeCenter + new Vector3(x, y, z);
-
-            particleDataArray[i] = new ParticleGPU
+            particles.Add(new ParticleGPU
             {
-                position = initialPosition,
+                position = new Vector3(x, y, z),
                 velocity = Vector3.zero,
                 acceleration = Vector3.zero,
                 density = 0f,
                 pressure = 0f,
-            };
-            
-            Vector3 pos = initialPosition;
-            float scale = particleRenderScale;
-            Matrix4x4 mat = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * scale);
+                type = 0 // 流体粒子
+            });
+            fluidCount++;
+            if (particles.Count < 9999999)
+                continue;
+            Debug.LogWarning("极高上限！熔断机制触发！");
+            break;
+        }
+
+        actualParticles = particles.Count;
+
+        particleDataArray = particles.ToArray();
+        meshPropertiesArray = new MeshProperties[actualParticles];
+        
+        for (int i = 0; i < actualParticles; i++)
+        {
+            Vector3 pos = particleDataArray[i].position;
+            // 初始缩放设为 1，稍后 CSBuildMatrices 会隐藏边界粒子
+            Matrix4x4 mat = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * particleRenderScale);
             meshPropertiesArray[i].mat = mat;
         }
     }
@@ -166,7 +235,7 @@ public class ParticleControllerGPU : MonoBehaviour
         }
 
         int particleStructSize = Marshal.SizeOf<ParticleGPU>();
-        particleBuffer = new ComputeBuffer(maxParticles, particleStructSize);
+        particleBuffer = new ComputeBuffer(actualParticles, particleStructSize);
         particleBuffer.SetData(particleDataArray);
 
         if (!particleComputeShader) Debug.LogError("Particle compute shader not initialized!");
@@ -175,6 +244,7 @@ public class ParticleControllerGPU : MonoBehaviour
         csPressureKernelID = particleComputeShader.FindKernel("CSComputePressure");
         csForceKernelID = particleComputeShader.FindKernel("CSComputeForce");
         csIntegrateKernelID = particleComputeShader.FindKernel("CSIntegrate");
+        csBuildMatricesKernelID = particleComputeShader.FindKernel("CSBuildMatrices");
         
         // 绑定 ComputeBuffer
         particleComputeShader.SetBuffer(csDensityKernelID, Particles, particleBuffer);
@@ -183,7 +253,7 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.SetBuffer(csIntegrateKernelID, Particles, particleBuffer);
         
         // 设置 Compute Shader 常量参数
-        particleComputeShader.SetInt(MaxParticles, maxParticles);
+        particleComputeShader.SetInt(MaxParticles, actualParticles);
         particleComputeShader.SetFloat(ParticleMass, particleMass);
         particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
         particleComputeShader.SetFloat(GasConstantB, gasConstantB);
@@ -201,18 +271,14 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.SetFloat(BoundaryDamping, boundaryDamping);
         particleComputeShader.SetVector(SpawnVolumeCenter, spawnVolumeCenter);
         particleComputeShader.SetVector(SpawnVolumeSize, spawnVolumeSize);
-        
-        // 性能优化部分
-        csBuildMatricesKernelID = particleComputeShader.FindKernel("CSBuildMatrices");
-        
-        propertiesBuffer = new ComputeBuffer(maxParticles, Marshal.SizeOf(typeof(MeshProperties)), ComputeBufferType.Structured);
-        propertiesBuffer.SetData(meshPropertiesArray);
 
-        // 初始化DrawMeshInstancedIndirect用的参数buffer
+        propertiesBuffer = new ComputeBuffer(actualParticles, Marshal.SizeOf(typeof(MeshProperties)), ComputeBufferType.Structured);
+        propertiesBuffer.SetData(meshPropertiesArray);
+        
         argsBuffer?.Release();
         uint[] args = {
             particleMesh.GetIndexCount(0),
-            (uint)maxParticles,
+            (uint)actualParticles,
             particleMesh.GetIndexStart(0),
             particleMesh.GetBaseVertex(0),
             0
@@ -273,15 +339,7 @@ public class ParticleControllerGPU : MonoBehaviour
     }
 
     #region Debug
-    public void DebugParticleTransforms()
-    {
-        for (int i = 0; i < maxParticles; i++)
-        {
-            Debug.Log($"Particle {i}: Position = {particleDataArray[i].position}, Velocity = {particleDataArray[i].velocity}");
-        }
-    }
-
-    private void OnDrawGizmos()
+    private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireCube(spawnVolumeCenter, spawnVolumeSize);

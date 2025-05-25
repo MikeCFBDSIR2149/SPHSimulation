@@ -18,6 +18,7 @@ struct ParticleGPUData {
     float3 acceleration;
     float density;
     float pressure;
+    int type;
 };
 
 /// 参数全部按照 C# 脚本设置
@@ -177,55 +178,58 @@ void CSIntegrate (uint3 id : SV_DispatchThreadID)
 
     if (i >= _MaxParticles) return;
     
+    if (_Particles[i].type != 0) return;
+    
     float3 currentPosition = _Particles[i].position;
     float3 currentVelocity = _Particles[i].velocity;
     float3 currentAcceleration = _Particles[i].acceleration;
 
-    // 更新速度
     currentVelocity += currentAcceleration * _DeltaTime;
-
-    // 更新位置
     currentPosition += currentVelocity * _DeltaTime;
 
-    // 处理边界条件
     float3 minBounds = _SpawnVolumeCenter - _SpawnVolumeSize / 2.0f;
     float3 maxBounds = _SpawnVolumeCenter + _SpawnVolumeSize / 2.0f;
 
+    // 硬边界钳制
+    float epsilon = 0.02f;
+    float hardDamping = -0.8f;
+
     // X 轴
-    if (currentPosition.x < minBounds.x) {
-        currentPosition.x = minBounds.x;
-        currentVelocity.x *= -_BoundaryDamping;
-    } else if (currentPosition.x > maxBounds.x) {
-        currentPosition.x = maxBounds.x;
-        currentVelocity.x *= -_BoundaryDamping;
+    if (currentPosition.x <= minBounds.x) {
+        currentPosition.x = minBounds.x + epsilon;
+        currentVelocity.x *= hardDamping;
+    } else if (currentPosition.x >= maxBounds.x) {
+        currentPosition.x = maxBounds.x - epsilon;
+        currentVelocity.x *= hardDamping;
     }
 
-    // Y 轴 (仅下方边界)
-    if (currentPosition.y < minBounds.y) {
-        currentPosition.y = minBounds.y;
-        currentVelocity.y *= -_BoundaryDamping;
+    // Y 轴
+    if (currentPosition.y <= minBounds.y) {
+        currentPosition.y = minBounds.y + epsilon;
+        currentVelocity.y *= hardDamping;
     }
 
     // Z 轴
-    if (currentPosition.z < minBounds.z) {
-        currentPosition.z = minBounds.z;
-        currentVelocity.z *= -_BoundaryDamping;
-    } else if (currentPosition.z > maxBounds.z) {
-        currentPosition.z = maxBounds.z;
-        currentVelocity.z *= -_BoundaryDamping;
+    if (currentPosition.z <= minBounds.z) {
+        currentPosition.z = minBounds.z + epsilon;
+        currentVelocity.z *= hardDamping;
+    } else if (currentPosition.z >= maxBounds.z) {
+        currentPosition.z = maxBounds.z - epsilon;
+        currentVelocity.z *= hardDamping;
     }
 
-    // 完成
     _Particles[i].position = currentPosition;
     _Particles[i].velocity = currentVelocity;
+    
 }
 
 [numthreads(64,1,1)]
 void CSBuildMatrices(uint id : SV_DispatchThreadID)
 {
-    if (id >= _MaxParticles) return;
-    float3 pos = _Particles[id].position;
-    float scale = _ParticleRenderScale;
+    uint i = id.x;
+    if (i >= _MaxParticles) return;
+    float3 pos = _Particles[i].position;
+    float scale = (_Particles[i].type == 1) ? 0.0f : _ParticleRenderScale;
     float4x4 mat = float4x4(
         float4(scale, 0,     0,     pos.x), // 第 1 行
         float4(0,     scale, 0,     pos.y), // 第 2 行
