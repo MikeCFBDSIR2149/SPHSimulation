@@ -7,9 +7,14 @@
 #pragma kernel CSComputeForce
 // 最终计算和边界处理内核
 #pragma kernel CSIntegrate
-/// 性能优化
+// 哈希计算内核
+#pragma kernel CSCalculateHash
 // GPU 粒子构建内核
 #pragma kernel CSBuildMatrices
+// 哈希网格构建内核
+#pragma kernel CSBuildGridInfo
+// 哈希网格清除内核
+#pragma kernel CSClearGridInfo
 
 /// 粒子结构
 struct ParticleGPUData {
@@ -21,10 +26,10 @@ struct ParticleGPUData {
     int type;
 };
 
-/// 参数全部按照 C# 脚本设置
 RWStructuredBuffer<ParticleGPUData> _Particles;
 // 模拟参数
-uint _MaxParticles;             // 粒子数量
+uint _ActualParticleCount;
+uint _PaddedParticleCount;
 float _ParticleMass;            // 粒子模拟质量
 float _RestDensityRho;          // 静止密度 rho
 float _GasConstantB;            // Tait 状态方程中的流体刚度系数
@@ -43,12 +48,33 @@ float _BoundaryDamping;     // 边界阻尼系数
 float3 _SpawnVolumeCenter;  // 粒子生成体积中心
 float3 _SpawnVolumeSize;    // 粒子生成体积大小
 
+/// 哈希结构
+struct ParticleHash {
+    uint hash;
+    uint index;
+};
+
+RWStructuredBuffer<ParticleHash> _ParticleHashes;
+float _GridCellSize;
+float3 _GridMin;
+int3 _GridSize;
+
+/// 网格信息结构
+struct GridInfo {
+    uint start;
+    uint end;
+};
+
+RWStructuredBuffer<GridInfo> _GridInfo;
+uint _GridTotalCells;
+
+/// GPU 粒子属性结构
 struct MeshProperties
 {
     float4x4 mat;
 };
-RWStructuredBuffer<MeshProperties> _Properties;
 
+RWStructuredBuffer<MeshProperties> _Properties;
 float _ParticleRenderScale;
 
 /// 常用函数
@@ -79,25 +105,65 @@ float ViscosityLaplacianKernel(float radius)
     return _ViscosityLaplacianConstant * (_SmoothingRadiusH - radius);
 }
 
+// 获取坐标哈希函数
+uint GetGridHash(float3 pos)
+{
+    int3 cellCoords = (int3)floor((pos - _GridMin) / _GridCellSize);
+    cellCoords = clamp(cellCoords, int3(0, 0, 0), _GridSize - int3(1, 1, 1)); // 钳制坐标
+    return (uint)(cellCoords.x + cellCoords.y * _GridSize.x + cellCoords.z * _GridSize.x * _GridSize.y);
+}
+
+// 从网格坐标获取哈希
+uint GetGridHashFromCoords(int3 cellCoords)
+{
+    cellCoords = clamp(cellCoords, int3(0, 0, 0), _GridSize - int3(1, 1, 1)); // 钳制坐标
+    return (uint)(cellCoords.x + cellCoords.y * _GridSize.x + cellCoords.z * _GridSize.x * _GridSize.y);
+}
+
 /// 内核函数
 // 密度计算函数
 [numthreads(64,1,1)]
 void CSComputeDensity (uint3 id : SV_DispatchThreadID)
 {
-    uint i = id.x;
-    if (i >= _MaxParticles) return;
+    uint k = id.x;
+    if (k >= _ActualParticleCount) return;
+    
+    uint i = _ParticleHashes[k].index;
 
     _Particles[i].density = 0.0f;
     float3 pos_i = _Particles[i].position;
+
+    int3 cell_i = (int3)floor((pos_i - _GridMin) / _GridCellSize);
     
-    for (uint j = 0; j < _MaxParticles; ++j)
+    for (int dz = -1; dz <= 1; ++dz)
     {
-        float3 positionVector_ij = _Particles[j].position - pos_i;
-        float radiusSquared = dot(positionVector_ij, positionVector_ij);
-        
-        if (radiusSquared < _HSquared)
+        for (int dy = -1; dy <= 1; ++dy)
         {
-            _Particles[i].density += _ParticleMass * Poly6Kernel(radiusSquared);
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                int3 cell_n_coords = cell_i + int3(dx, dy, dz);
+                uint hash_n = GetGridHashFromCoords(cell_n_coords);
+                
+                GridInfo info = _GridInfo[hash_n];
+                uint start_idx = info.start;
+                uint end_idx = info.end;
+                
+                if (start_idx != 0xFFFFFFFF && end_idx > start_idx)
+                {
+                    for (uint k_n = start_idx; k_n < end_idx; ++k_n)
+                    {
+                        uint j = _ParticleHashes[k_n].index; // 邻居的原始索引
+
+                        float3 positionVector_ij = _Particles[j].position - pos_i;
+                        float radiusSquared = dot(positionVector_ij, positionVector_ij);
+
+                        if (radiusSquared < _HSquared)
+                        {
+                            _Particles[i].density += _ParticleMass * Poly6Kernel(radiusSquared);
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -112,7 +178,7 @@ void CSComputeDensity (uint3 id : SV_DispatchThreadID)
 void CSComputePressure (uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
-    if (i >= _MaxParticles) return;
+    if (i >= _ActualParticleCount) return;
 
     float currentDensity = max(_Particles[i].density, 1e-4f);
 
@@ -125,8 +191,13 @@ void CSComputePressure (uint3 id : SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void CSComputeForce (uint3 id : SV_DispatchThreadID)
 {
-    uint i = id.x;
-    if (i >= _MaxParticles) return;
+    uint k = id.x;
+    if (k >= _ActualParticleCount) return;
+
+    uint i = _ParticleHashes[k].index;
+    
+    // 边界粒子不计算力
+    if (_Particles[i].type == 1) return; 
 
     _Particles[i].acceleration = float3(0.0f, 0.0f, 0.0f);
     
@@ -134,31 +205,55 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
     float density_i = _Particles[i].density;
     float pressure_i = _Particles[i].pressure;
     float3 velocity_i = _Particles[i].velocity;
+
+    int3 cell_i = (int3)floor((pos_i - _GridMin) / _GridCellSize);
     
-    for (uint j = 0; j < _MaxParticles; ++j)
+    for (int dz = -1; dz <= 1; ++dz)
     {
-        if (i == j) continue;
-
-        float density_j = _Particles[j].density;
-        float pressure_j = _Particles[j].pressure;
-        float3 velocity_j = _Particles[j].velocity;
-        
-        float3 positionVector_ij = _Particles[j].position - pos_i;
-        float radiusSquared = dot(positionVector_ij, positionVector_ij);
-        
-        if (radiusSquared < _HSquared)
+        for (int dy = -1; dy <= 1; ++dy)
         {
-            float radius = sqrt(radiusSquared);
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                int3 cell_n_coords = cell_i + int3(dx, dy, dz);
+                uint hash_n = GetGridHashFromCoords(cell_n_coords);
 
-            float3 pressureAcceleration = _ParticleMass *
-                (pressure_i / (density_i * density_i) + pressure_j / (density_j * density_j)) *
-                    SpikyGradientKernel(positionVector_ij);
+                GridInfo info = _GridInfo[hash_n];
+                uint start_idx = info.start;
+                uint end_idx = info.end;
 
-            float3 viscosityAcceleration = (velocity_j - velocity_i) *
-                (_ViscosityMu * _ParticleMass / (density_i * density_j) *
-                    ViscosityLaplacianKernel(radius));
-            
-            _Particles[i].acceleration += pressureAcceleration + viscosityAcceleration;
+                if (start_idx != 0xFFFFFFFF && end_idx > start_idx)
+                {
+                    for (uint k_n = start_idx; k_n < end_idx; ++k_n)
+                    {
+                        uint j = _ParticleHashes[k_n].index; // 邻居的原始索引
+                        if (i == j) continue;
+
+                        float density_j = _Particles[j].density;
+                        float pressure_j = _Particles[j].pressure;
+                        float3 velocity_j = _Particles[j].velocity;
+                        
+                        float3 positionVector_ij = _Particles[j].position - pos_i;
+                        float radiusSquared = dot(positionVector_ij, positionVector_ij);
+                        
+                        if (radiusSquared < _HSquared)
+                        {
+                            float radius = sqrt(radiusSquared);
+                            
+                            // 压力
+                            float3 pressureAcceleration = _ParticleMass *
+                                (pressure_i / (density_i * density_i) + pressure_j / (density_j * density_j)) *
+                                    SpikyGradientKernel(positionVector_ij);
+
+                            // 粘度
+                            float3 viscosityAcceleration = (velocity_j - velocity_i) *
+                                (_ViscosityMu * _ParticleMass / (density_i * density_j) *
+                                    ViscosityLaplacianKernel(radius));
+                            
+                            _Particles[i].acceleration += pressureAcceleration + viscosityAcceleration;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -167,7 +262,6 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
     }
     
     _Particles[i].acceleration += _Gravity;
-    _Particles[i].acceleration *= 0.9;
 }
 
 // 最终计算和边界处理函数
@@ -176,7 +270,7 @@ void CSIntegrate (uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
 
-    if (i >= _MaxParticles) return;
+    if (i >= _ActualParticleCount) return;
     
     if (_Particles[i].type != 0) return;
     
@@ -192,7 +286,7 @@ void CSIntegrate (uint3 id : SV_DispatchThreadID)
 
     // 硬边界钳制
     float epsilon = 0.02f;
-    float hardDamping = -0.8f;
+    float hardDamping = -_BoundaryDamping;
 
     // X 轴
     if (currentPosition.x <= minBounds.x) {
@@ -223,11 +317,75 @@ void CSIntegrate (uint3 id : SV_DispatchThreadID)
     
 }
 
+// 哈希计算函数
+[numthreads(64,1,1)]
+void CSCalculateHash (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _PaddedParticleCount) return;
+
+    if (i < _ActualParticleCount)
+    {
+        float3 pos = _Particles[i].position;
+        uint hashValue = GetGridHash(pos);
+        _ParticleHashes[i].hash = hashValue;
+        _ParticleHashes[i].index = i;
+    }
+    else
+    {
+        _ParticleHashes[i].hash = 0xFFFFFFFF;
+        _ParticleHashes[i].index = 0xFFFFFFFF;
+    }
+}
+
+// 哈希网格构建函数
+[numthreads(64,1,1)]
+void CSBuildGridInfo (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _ActualParticleCount) return;
+
+    uint current_hash = _ParticleHashes[i].hash;
+    if (current_hash == 0xFFFFFFFF) return; // 忽略填充粒子
+
+    uint prev_hash = (i == 0) ? 0xFFFFFFFF : _ParticleHashes[i - 1].hash;
+    
+    // 检查 i+1 是否越界
+    uint next_hash = 0xFFFFFFFF; // 默认为无效值
+    if (i < _ActualParticleCount - 1) {
+        next_hash = _ParticleHashes[i + 1].hash;
+    }
+    
+    // 当前哈希的开始
+    if (current_hash != prev_hash)
+    {
+        _GridInfo[current_hash].start = i;
+    }
+
+    // 当前哈希的结束
+    if (current_hash != next_hash)
+    {
+        _GridInfo[current_hash].end = i + 1;
+    }
+}
+
+// 哈希网格清除函数
+[numthreads(64,1,1)]
+void CSClearGridInfo (uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _GridTotalCells) return;
+    
+    _GridInfo[i].start = 0xFFFFFFFF; // 无效值
+    _GridInfo[i].end = 0;
+}
+
+// GPU 粒子构建函数
 [numthreads(64,1,1)]
 void CSBuildMatrices(uint id : SV_DispatchThreadID)
 {
     uint i = id.x;
-    if (i >= _MaxParticles) return;
+    if (i >= _ActualParticleCount) return;
     float3 pos = _Particles[i].position;
     float scale = (_Particles[i].type == 1) ? 0.0f : _ParticleRenderScale;
     float4x4 mat = float4x4(

@@ -1113,15 +1113,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   particleComputeShader: {fileID: 7200000, guid: 0a7710131453b5b4790d8103dc20916f, type: 3}
+  bitonicSortShader: {fileID: 7200000, guid: 7012e1d5a8ba165459fcf29a4279cb95, type: 3}
   particleMass: 0.1
-  restDensityRho: 500
-  gasConstantB: 50
   pressureExponentGamma: 7
-  viscosityMu: 0.05
   gravity: {x: 0, y: -9.81, z: 0}
-  smoothingRadiusH: 0.2
-  boundaryDamping: 0.8
-  maxParticles: 28000
+  smoothingRadiusH: 0.3
+  boundaryDamping: 0.6
+  restDensityRho: 500
+  gasConstantB: 200
+  viscosityMu: 0.05
+  targetParticleCount: 36000
   boundaryLayers: 4
   spacingParameter: 1.8
   spawnVolumeCenter: {x: 0, y: 0, z: 0}

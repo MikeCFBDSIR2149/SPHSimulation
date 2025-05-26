@@ -1,4 +1,4 @@
-Shader "Custom/ParticlesIndirect"
+Shader "Custom/ParticleIndirect"
 {
     Properties { }
     SubShader {
