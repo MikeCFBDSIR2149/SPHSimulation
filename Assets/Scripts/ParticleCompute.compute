@@ -389,10 +389,10 @@ void CSBuildMatrices(uint id : SV_DispatchThreadID)
     float3 pos = _Particles[i].position;
     float scale = (_Particles[i].type == 1) ? 0.0f : _ParticleRenderScale;
     float4x4 mat = float4x4(
-        float4(scale, 0,     0,     pos.x), // 第 1 行
-        float4(0,     scale, 0,     pos.y), // 第 2 行
-        float4(0,     0,     scale, pos.z), // 第 3 行
-        float4(0,     0,     0,     1)      // 第 4 行
+        float4(scale, 0,     0,     pos.x),
+        float4(0,     scale, 0,     pos.y),
+        float4(0,     0,     scale, pos.z),
+        float4(0,     0,     0,     1)
     );
     _Properties[id].mat = mat;
 }

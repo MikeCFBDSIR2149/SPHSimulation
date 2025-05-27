@@ -5,6 +5,8 @@ using Random = UnityEngine.Random;
 
 public class ParticleControllerGPU : MonoBehaviour
 {
+    public static ParticleControllerGPU Instance { get; private set; } // 单例
+    
     // 粒子
     [StructLayout(LayoutKind.Sequential)]
     private struct ParticleGPU
@@ -43,16 +45,16 @@ public class ParticleControllerGPU : MonoBehaviour
     [Header("GPU Compute")]
     public ComputeShader particleComputeShader;
     public ComputeShader bitonicSortShader;
-    private ComputeBuffer particleBuffer;
+    protected ComputeBuffer particleBuffer;
     private ComputeBuffer propertiesBuffer;
-    private ComputeBuffer argsBuffer;
+    protected ComputeBuffer argsBuffer;
     private ComputeBuffer particleHashBuffer;
     private ComputeBuffer gridInfoBuffer;
     
     private const int threadsPerGroupX_SPH = 64;
     private const int threadsPerGroupX_Sort = 256;
     
-    private Vector3Int gridSize;                // 网格尺寸(网格数量的尺寸)
+    private Vector3Int gridSize;                // 网格尺寸 (网格数量的尺寸)
     private Vector3 gridWorldMin;               // 网格世界坐标最小值
     private int gridTotalCells;
     
@@ -61,7 +63,7 @@ public class ParticleControllerGPU : MonoBehaviour
     private int csPressureKernelID;
     private int csForceKernelID;
     private int csIntegrateKernelID;
-    private static readonly int Particles = Shader.PropertyToID("_Particles");
+    protected static readonly int Particles = Shader.PropertyToID("_Particles");
     private static readonly int ActualParticleCount = Shader.PropertyToID("_ActualParticleCount");
     private static readonly int PaddedParticleCount = Shader.PropertyToID("_PaddedParticleCount");
     private static readonly int ParticleMass = Shader.PropertyToID("_ParticleMass");
@@ -70,7 +72,7 @@ public class ParticleControllerGPU : MonoBehaviour
     private static readonly int PressureExponentGamma = Shader.PropertyToID("_PressureExponentGamma");
     private static readonly int ViscosityMu = Shader.PropertyToID("_ViscosityMu");
     private static readonly int Gravity = Shader.PropertyToID("_Gravity");
-    private static readonly int SmoothingRadiusH = Shader.PropertyToID("_SmoothingRadiusH");
+    protected static readonly int SmoothingRadiusH = Shader.PropertyToID("_SmoothingRadiusH");
     private static readonly int HSquared = Shader.PropertyToID("_HSquared");
     private static readonly int Poly6Constant = Shader.PropertyToID("_Poly6Constant");
     private static readonly int SpikyGradientConstant = Shader.PropertyToID("_SpikyGradientConstant");
@@ -121,12 +123,14 @@ public class ParticleControllerGPU : MonoBehaviour
     private int actualParticleCount;            // 实际总粒子数
     private int paddedParticleCount;            // Bitonic Sort 要求 2^n，因此必须填补未满的粒子数量
     public int boundaryLayers = 4;              // 边界层数
-    public float spacingParameter = 1.8f;       // 粒子间距参数，影响粒子分布密度(边界粒子)
+    public float spacingParameter = 1.8f;       // 粒子间距参数，影响粒子分布密度 (边界粒子)
     public Vector3 spawnVolumeCenter = Vector3.zero;
     public Vector3 spawnVolumeSize;
     
     [Header("Rendering Settings")]
     public Mesh particleMesh;
+    
+    [Header("Rendering Settings (Unavailable if using SSF)")]
     public Material particleMaterial;
     public float particleRenderScale;
     
@@ -134,6 +138,12 @@ public class ParticleControllerGPU : MonoBehaviour
     private float poly6Constant;
     private float spikyGradientConstant;
     private float viscosityLaplacianConstant;
+    
+    private void Awake()
+    {
+        if (Instance && Instance != this) Destroy(this);
+        else Instance = this;
+    }
     
     private void OnEnable()
     {
@@ -406,9 +416,9 @@ public class ParticleControllerGPU : MonoBehaviour
         int N = paddedParticleCount;
         if (N <= 1) return;
 
-        int logN = (int)Mathf.Log(N, 2); // 对于 N=65536, logN = 16
+        int logN = (int)Mathf.Log(N, 2);
 
-        for (int level = 0; level < logN; level++) // level 会从 0 到 15
+        for (int level = 0; level < logN; level++)
         {
             for (int levelMask = 0; levelMask <= level; levelMask++) 
             {
@@ -447,7 +457,7 @@ public class ParticleControllerGPU : MonoBehaviour
         ClearBuffers();
     }
 
-    // OnDestroy 释放 ComputeBuffer
+    // 释放 ComputeBuffer
     private void ClearBuffers()
     {
         particleBuffer?.Release();

@@ -342,7 +342,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0.09904577, y: -0.89239913, z: 0.23911765, w: 0.3696438}
-  m_LocalPosition: {x: 2.5, y: 1.8, z: 2.5}
+  m_LocalPosition: {x: 3, y: 2, z: 3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1077,6 +1077,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1624591210}
   - component: {fileID: 1624591211}
+  - component: {fileID: 1624591213}
   - component: {fileID: 1624591212}
   m_Layer: 0
   m_Name: Logic
@@ -1124,7 +1125,7 @@ MonoBehaviour:
   viscosityMu: 0.05
   targetParticleCount: 36000
   boundaryLayers: 4
-  spacingParameter: 1.8
+  spacingParameter: 1.5
   spawnVolumeCenter: {x: 0, y: 0, z: 0}
   spawnVolumeSize: {x: 3, y: 2, z: 3}
   particleMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
@@ -1143,6 +1144,38 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   controller: {fileID: 1624591211}
+--- !u!114 &1624591213
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1624591208}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c9c103ba993646a7a6f0d90de0c84dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  particleComputeShader: {fileID: 7200000, guid: 0a7710131453b5b4790d8103dc20916f, type: 3}
+  bitonicSortShader: {fileID: 7200000, guid: 7012e1d5a8ba165459fcf29a4279cb95, type: 3}
+  particleMass: 0.1
+  pressureExponentGamma: 7
+  gravity: {x: 0, y: -9.81, z: 0}
+  smoothingRadiusH: 0.3
+  boundaryDamping: 0.6
+  restDensityRho: 500
+  gasConstantB: 200
+  viscosityMu: 0.05
+  targetParticleCount: 36000
+  boundaryLayers: 4
+  spacingParameter: 1.5
+  spawnVolumeCenter: {x: 0, y: 0, z: 0}
+  spawnVolumeSize: {x: 3, y: 2, z: 3}
+  particleMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  particleMaterial: {fileID: 2100000, guid: 9d503dec59187994c8311e7a23c95c5d, type: 2}
+  particleRenderScale: 0.015
+  ssfDepthMaterial: {fileID: 2100000, guid: a6944c2e5410a42409e1a1be55ccc9ca, type: 2}
+  ssfThicknessMaterial: {fileID: 2100000, guid: 2d299e4ed25874459a917ff1579ca94f, type: 2}
 --- !u!1 &1780959913
 GameObject:
   m_ObjectHideFlags: 0

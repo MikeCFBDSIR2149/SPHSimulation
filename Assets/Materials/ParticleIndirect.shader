@@ -9,7 +9,7 @@ Shader "Custom/ParticleIndirect"
             #pragma fragment frag
             #include "UnityCG.cginc"
 
-            struct appdata_t {
+            struct appdata {
                 float4 vertex : POSITION;
             };
             struct v2f {
@@ -23,7 +23,7 @@ Shader "Custom/ParticleIndirect"
 
             StructuredBuffer<MeshProperties> _Properties;
 
-            v2f vert(appdata_t i, uint instanceID: SV_InstanceID)
+            v2f vert(appdata i, uint instanceID: SV_InstanceID)
             {
                 v2f o;
                 float4 pos = mul(_Properties[instanceID].mat, i.vertex);
