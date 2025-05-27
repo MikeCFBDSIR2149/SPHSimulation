@@ -17,12 +17,12 @@ MonoBehaviour:
     renderPassEvent: 550
     particleDepthMaterial: {fileID: 2100000, guid: a6944c2e5410a42409e1a1be55ccc9ca, type: 2}
     particleThicknessMaterial: {fileID: 2100000, guid: 2d299e4ed25874459a917ff1579ca94f, type: 2}
-    finalShadingMaterial: {fileID: 2100000, guid: 7a9b806d5303e444b90d04e83f376653, type: 2}
-    particleSizeMultiplier: 0.15
     bilateralBlurMaterial: {fileID: 2100000, guid: 20d0ec51fef4f4f7b873dc9852df3abd, type: 2}
-    blurIterations: 5
-    depthSigma: 0.2
-    spatialSigma: 2
+    finalShadingMaterial: {fileID: 2100000, guid: 7a9b806d5303e444b90d04e83f376653, type: 2}
+    particleSizeMultiplier: 0.08
+    blurIterations: 15
+    depthSigma: 1
+    spatialSigma: 10
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -53,7 +53,7 @@ MonoBehaviour:
   m_RendererFeatureMap: ad6b866f10d7b46c55f8ffe94c635ff8
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
-  postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
+  postProcessData: {fileID: 0}
   m_AssetVersion: 2
   m_OpaqueLayerMask:
     serializedVersion: 2

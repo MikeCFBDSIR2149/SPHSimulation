@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 85cf0b004bc4a654b9e501efcce47902, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -1164,9 +1164,9 @@ MonoBehaviour:
   smoothingRadiusH: 0.3
   boundaryDamping: 0.6
   restDensityRho: 500
-  gasConstantB: 200
-  viscosityMu: 0.05
-  targetParticleCount: 36000
+  gasConstantB: 100
+  viscosityMu: 0.1
+  targetParticleCount: 40000
   boundaryLayers: 4
   spacingParameter: 1.5
   spawnVolumeCenter: {x: 0, y: 0, z: 0}

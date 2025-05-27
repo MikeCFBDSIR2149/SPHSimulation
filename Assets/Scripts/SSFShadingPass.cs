@@ -11,6 +11,9 @@ public class SSFShadingPass : ScriptableRenderPass
     private new readonly ProfilingSampler profilingSampler = new ProfilingSampler("SSF Shading Pass");
 
     private RTHandle m_SmoothedDepthRT; // 需要从 SmoothPass 获取
+    
+    private static readonly int FluidSmoothedDepthTexture = Shader.PropertyToID("_FluidSmoothedDepthTexture");
+    private static readonly int FluidThicknessTexture = Shader.PropertyToID("_FluidThicknessTexture");
 
     public SSFShadingPass(SSFRenderFeature.SSFSettings settings, Material material, SSFRenderFeature feature)
     {
@@ -50,6 +53,7 @@ public class SSFShadingPass : ScriptableRenderPass
     public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
     {
         RTHandle sourceRT = m_SmoothedDepthRT;
+        RTHandle thicknessRT = feature.ParticlePass?.ThicknessRT;
         
         if (!Application.isPlaying) return;
 
@@ -65,10 +69,14 @@ public class SSFShadingPass : ScriptableRenderPass
 
         using (new ProfilingScope(cmd, profilingSampler))
         {
-            // --- 使用 Blitter, 源是 sourceRT ---
-            Blitter.BlitCameraTexture(cmd, sourceRT, cameraColorTarget, shadingMaterial, 0);
+            cmd.SetGlobalTexture(FluidSmoothedDepthTexture, sourceRT);
+            cmd.SetGlobalTexture(FluidThicknessTexture, thicknessRT);
+            // settings.finalShadingMaterial.SetTexture(FluidSmoothedDepthTexture, sourceRT);
+            // settings.finalShadingMaterial.SetTexture(FluidThicknessTexture, thicknessRT);
+            // cmd.Blit(sourceRT, cameraColorTarget);
+            cmd.SetRenderTarget(cameraColorTarget);
+            cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity, shadingMaterial, 0, 0);
         }
-
         context.ExecuteCommandBuffer(cmd);
         CommandBufferPool.Release(cmd);
     }

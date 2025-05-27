@@ -58,12 +58,6 @@ public class SSFSmoothPass : ScriptableRenderPass
         CommandBuffer cmd = CommandBufferPool.Get("SSF Bilateral Blur");
         RTHandle sourceDepthRT = feature.ParticlePass.DepthRT; // 从 Feature 获取源深度 RT
 
-        // --- 修改开始: 使用 RenderTargetIdentifier ---
-        RenderTargetIdentifier sourceID = sourceDepthRT; // RTHandle 可以隐式转换为 RenderTargetIdentifier
-        RenderTargetIdentifier tempID = m_TempBlurRT;
-        RenderTargetIdentifier smoothID = m_SmoothedDepthRT;
-        // --- 修改结束 ---
-
         using (new ProfilingScope(cmd, profilingSampler))
         {
             bilateralBlurMat.SetInt(BlurRadius, settings.blurIterations);

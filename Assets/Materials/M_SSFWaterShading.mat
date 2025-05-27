@@ -22,9 +22,27 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _EnvironmentCubemap:
+        m_Texture: {fileID: 8900000, guid: 1153dc89e66880c4eb7adc16ba588855, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FluidSmoothedDepthTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FluidThicknessTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
-    m_Floats: []
-    m_Colors: []
+    m_Floats:
+    - _FresnelPower: 5
+    - _ReflectionStrength: 0.5
+    - _RefractionStrength: 0.02
+    - _ThicknessMultiplier: 1
+    m_Colors:
+    - _WaterBaseColor: {r: 0, g: 0.5269676, b: 0.690566, a: 1}
+    - _WaterDeepColor: {r: 0, g: 0.23815395, b: 0.3283019, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
