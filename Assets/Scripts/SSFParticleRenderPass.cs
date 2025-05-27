@@ -52,7 +52,6 @@ public class SSFParticleRenderPass : ScriptableRenderPass
 
         if (!particleController)
         {
-            Debug.LogError("ParticleControllerSSF instance not found!"); 
             return;
         }
         ComputeBuffer argsBuffer = particleController.GetArgsBuffer(); // 需要 GetArgsBuffer()

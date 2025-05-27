@@ -9,13 +9,14 @@ public class SSFRenderFeature : ScriptableRendererFeature
         public RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
         public Material particleDepthMaterial; // 渲染深度的材质
         public Material particleThicknessMaterial; // 渲染厚度的材质
+        public Material bilateralBlurMaterial; // 用于双边滤波的材质
+        public Material finalShadingMaterial;
         
         [Header("Particle Settings")]
         [Range(0.01f, 1.0f)]
         public float particleSizeMultiplier = 0.5f; // 粒子渲染大小
         
         [Header("Smoothing Settings")]
-        public Material bilateralBlurMaterial; // 用于双边滤波的材质
         [Range(1, 15)]
         public int blurIterations = 5; // 模糊半径 (采样点数 = iterations*2+1)
         [Range(0.001f, 1.0f)]
@@ -28,8 +29,10 @@ public class SSFRenderFeature : ScriptableRendererFeature
     
     private SSFParticleRenderPass ssfParticleRenderPass;
     private SSFSmoothPass ssfSmoothPass; 
+    private SSFShadingPass ssfShadingPass;
 
     public SSFParticleRenderPass ParticlePass => ssfParticleRenderPass;
+    public SSFSmoothPass SmoothPass => ssfSmoothPass;
 
     public override void Create()
     {
@@ -38,9 +41,20 @@ public class SSFRenderFeature : ScriptableRendererFeature
             Debug.LogError("SSF Feature: Particle materials are not set!");
             return;
         }
+        if (!settings.bilateralBlurMaterial)
+        {
+            Debug.LogError("SSF Feature: Bilateral Blur material is not set!");
+            return;
+        }
+        if (!settings.finalShadingMaterial)
+        {
+            Debug.LogError("SSF Feature: Final Shading material is not set!");
+            return;
+        }
 
         ssfParticleRenderPass = new SSFParticleRenderPass(settings);
         ssfSmoothPass = new SSFSmoothPass(settings, this);
+        ssfShadingPass = new SSFShadingPass(settings, settings.finalShadingMaterial, this);
     }
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -49,6 +63,7 @@ public class SSFRenderFeature : ScriptableRendererFeature
 
         renderer.EnqueuePass(ssfParticleRenderPass);
         renderer.EnqueuePass(ssfSmoothPass);
+        renderer.EnqueuePass(ssfShadingPass);
     }
     
     protected override void Dispose(bool disposing)
