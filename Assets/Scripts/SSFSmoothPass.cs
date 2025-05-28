@@ -64,10 +64,10 @@ public class SSFSmoothPass : ScriptableRenderPass
             bilateralBlurMat.SetFloat(DepthSigma, settings.depthSigma);
             bilateralBlurMat.SetFloat(SpatialSigma, settings.spatialSigma);
 
-            cmd.SetGlobalVector(BlurDirection, new Vector4(1.0f, 0.0f, 0.0f, 0.0f));
+            cmd.SetGlobalVector(BlurDirection, new Vector4(0f, 0.0f, 0.0f, 0.0f));
             Blitter.BlitCameraTexture(cmd, sourceDepthRT, m_TempBlurRT, bilateralBlurMat, 0);
 
-            cmd.SetGlobalVector(BlurDirection, new Vector4(0.0f, 1.0f, 0.0f, 0.0f));
+            cmd.SetGlobalVector(BlurDirection, new Vector4(0.0f, 0f, 0.0f, 0.0f));
             Blitter.BlitCameraTexture(cmd, m_TempBlurRT, m_SmoothedDepthRT, bilateralBlurMat, 0);
 
             // 设置最终的全局纹理

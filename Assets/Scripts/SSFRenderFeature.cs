@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 public class SSFRenderFeature : ScriptableRendererFeature
@@ -6,6 +7,7 @@ public class SSFRenderFeature : ScriptableRendererFeature
     [System.Serializable]
     public class SSFSettings
     {
+        public RenderPipelineAsset applicationRPAsset; // 应用的渲染管线资产
         public RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
         public Material particleDepthMaterial; // 渲染深度的材质
         public Material particleThicknessMaterial; // 渲染厚度的材质
@@ -59,6 +61,7 @@ public class SSFRenderFeature : ScriptableRendererFeature
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
+        if (GraphicsSettings.defaultRenderPipeline != settings.applicationRPAsset || !SimulationGlobalStatus.Instance.inSimulation) return;
         if (ssfParticleRenderPass == null || ssfSmoothPass == null || !settings.bilateralBlurMaterial) return;
 
         renderer.EnqueuePass(ssfParticleRenderPass);

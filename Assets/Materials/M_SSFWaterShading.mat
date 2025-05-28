@@ -37,10 +37,10 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _FresnelPower: 5
-    - _ReflectionStrength: 0.5
-    - _RefractionStrength: 0.02
-    - _ThicknessMultiplier: 1
+    - _FresnelPower: 3.47
+    - _ReflectionStrength: 0.332
+    - _RefractionStrength: 0.049
+    - _ThicknessMultiplier: 0.5
     m_Colors:
     - _WaterBaseColor: {r: 0, g: 0.5269676, b: 0.690566, a: 1}
     - _WaterDeepColor: {r: 0, g: 0.23815395, b: 0.3283019, a: 1}

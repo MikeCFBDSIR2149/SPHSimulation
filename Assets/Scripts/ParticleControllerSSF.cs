@@ -22,13 +22,13 @@ public class ParticleControllerSSF : ParticleControllerGPU
         {
             ssfDepthMaterial.SetFloat(SmoothingRadiusH, smoothingRadiusH);
             ssfDepthMaterial.SetBuffer(Particles, particleBuffer);
-            ssfDepthMaterial.SetFloat(ParticleSizeMultiplier, 1.0f); // 可以从 SSFSettings 读取
+            ssfDepthMaterial.SetFloat(ParticleSizeMultiplier, 1.0f);
         }
         if (ssfThicknessMaterial && particleBuffer != null)
         {
             ssfThicknessMaterial.SetFloat(SmoothingRadiusH, smoothingRadiusH);
             ssfThicknessMaterial.SetBuffer(Particles, particleBuffer);
-            ssfThicknessMaterial.SetFloat(ParticleSizeMultiplier, 1.0f); // 可以从 SSFSettings 读取
+            ssfThicknessMaterial.SetFloat(ParticleSizeMultiplier, 1.0f);
         }
     }
     

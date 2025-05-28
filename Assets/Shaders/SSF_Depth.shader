@@ -92,33 +92,26 @@ Shader "Custom/SSF_Depth"
                 float2 centeredUV = input.uv * 2.0 - 1.0;
                 float distSq = dot(centeredUV, centeredUV);
 
-                // 裁剪到圆内
-                clip(1.0 - distSq);
+                clip(1 - distSq); // 裁剪到圆内
 
-                // --- 修改开始 ---
-                // 计算 NDC 深度
+                // 1. 计算原始 NDC 深度 (广告牌平面的深度)
                 float depthNDC = input.positionCS.z / input.positionCS.w;
 
-                // 计算球形偏移 (视图空间)
+                // 2. 将其转换为视图空间深度
                 float viewDepth = LinearEyeDepth(depthNDC, _ZBufferParams);
-                float zOffset = sqrt(max(0.0, 1.0 - distSq)) * input.radius;
-                float newViewDepth = viewDepth - zOffset;
 
-                // 将新的视图深度转换回 NDC 深度
-                // URP Core.hlsl 中没有直接的 View -> NDC 函数，但我们可以用 1/LinearEyeDepth 的逆过程
-                // 或者更简单：我们修改 Clip Space Z，然后重新计算 NDC
-                // H = Proj * View; View = InvProj * H
-                // 我们需要修改 H.z 使其在 View 空间移动 zOffset
-                // 一个更简单的方法是，我们先计算出近似的球形 NDC 深度
-                // 我们知道中心点是 depthNDC，边缘点应该更远（NDC 更大）
-                // 我们可以近似地认为 Z 偏移量与 NDC 偏移量成正比（这不完全准确，但常被使用）
-                // float ndcOffset = zOffset / _ProjectionParams.z; // 用 Far Plane 粗略缩放
-                // float sphereNDC = depthNDC + ndcOffset; // 更远 -> 更大
-                // 这个方法不精确。
-                // *** 让我们暂时简化：先不考虑球形深度，只输出平面 NDC 深度 ***
-                // *** 这样可以确保法线计算的基础是正确的。球形深度我们可以在法线之后再优化 ***
-                
-                return half4(depthNDC, 0, 0, 1); // <--- 改回这一行！
+                // 3. 计算球形偏移 (视图空间)
+                float zOffset = sqrt(max(0.0, 1.0 - distSq)) * input.radius;
+
+                // 4. 应用偏移得到球体表面的视图空间深度
+                //    (球体表面比其中心平面更靠近相机，所以减去 zOffset)
+                float newViewDepth_sphere = viewDepth - zOffset;
+
+                // 5. 将球体表面的视图空间深度转换为线性 0-1 深度
+                float linearDepth_sphere = (newViewDepth_sphere - _ProjectionParams.y) / (_ProjectionParams.z - _ProjectionParams.y);
+                linearDepth_sphere = saturate(linearDepth_sphere); // 确保在 0-1 范围
+
+                return half4(linearDepth_sphere, 0, 0, 1); // 输出包含球形效果的线性深度
             }
             ENDHLSL
         }

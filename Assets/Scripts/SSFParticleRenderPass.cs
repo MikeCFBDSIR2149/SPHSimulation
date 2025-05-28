@@ -67,8 +67,8 @@ public class SSFParticleRenderPass : ScriptableRenderPass
         using (new ProfilingScope(cmd, profilingSampler))
         {
             // 设置粒子数据 Buffer (需要确保材质能接收)
-            depthMaterial.SetBuffer(Particles, particleController.GetParticleBuffer()); // 需要 GetParticleBuffer()
-            thicknessMaterial.SetBuffer(Particles, particleController.GetParticleBuffer());
+            depthMaterial.SetBuffer(Particles, particleBuffer);
+            thicknessMaterial.SetBuffer(Particles, particleBuffer);
             depthMaterial.SetFloat(SmoothingRadiusH, particleController.smoothingRadiusH); // 需要 smoothingRadiusH
             thicknessMaterial.SetFloat(SmoothingRadiusH, particleController.smoothingRadiusH);
 
