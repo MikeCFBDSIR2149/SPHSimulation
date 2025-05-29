@@ -7,7 +7,7 @@ Shader "Custom/SSF_WaterShading" // 名称不变
         _RefractionStrength ("Refraction Strength", Range(0, 0.1)) = 0.02 // 折射强度
         _ReflectionStrength ("Reflection Strength", Range(0, 1)) = 0.5   // 反射强度
         _ThicknessMultiplier ("Thickness Multiplier", Range(0, 10)) = 1.0 // 厚度影响因子
-        _FresnelPower ("Fresnel Power", Range(1, 10)) = 5.0             // 菲涅尔指数
+        _FresnelPower ("Fresnel Power", Range(0, 10)) = 5.0             // 菲涅尔指数
         _EnvironmentCubemap ("Environment Cubemap", Cube) = "_Skybox" {} // 环境反射贴图
     }
     SubShader
@@ -52,6 +52,7 @@ Shader "Custom/SSF_WaterShading" // 名称不变
                 float2 texcoord   : TEXCOORD0;
             };
 
+            // --- 顶点着色器 (Blitter 标准) ---
             Varyings vert(Attributes input)
             {
                 Varyings output;
@@ -74,6 +75,7 @@ Shader "Custom/SSF_WaterShading" // 名称不变
                 float fluidLinear01Depth = Linear01Depth(depthNDC, _ZBufferParams);
 
                 // 比较：如果流体深度 >= 场景深度 (意味着流体在场景后面或完全相同)，则丢弃
+                // 减去一个很小的值 (Epsilon) 是为了处理精度问题，防止 Z-fighting
                 // if (fluidLinear01Depth >= sceneLinear01Depth - 0.0001)
                 // {
                 //    discard;
@@ -91,15 +93,15 @@ Shader "Custom/SSF_WaterShading" // 名称不变
                 float lenSq = dot(worldNormal, worldNormal);
 
                 // 阈值
-                // const float Epsilon = 1e-6;
-                // if (lenSq < Epsilon || !isfinite(worldNormal.x) || !isfinite(worldNormal.y) || !isfinite(worldNormal.z) )
-                // {
-                //     worldNormal = float3(0.0, 1.0, 0.0);
-                // }
-                // else
-                // {
+                const float Epsilon = 1e-6;
+                if (lenSq < Epsilon || !isfinite(worldNormal.x) || !isfinite(worldNormal.y) || !isfinite(worldNormal.z) )
+                {
+                    worldNormal = float3(0.0, 1.0, 0.0);
+                }
+                else
+                {
                     worldNormal = normalize(worldNormal);
-                // }
+                }
                 
                 // 3. 获取视角方向 (世界空间)
                 float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);

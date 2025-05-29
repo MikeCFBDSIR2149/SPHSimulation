@@ -111,6 +111,8 @@ Shader "Custom/SSF_Depth"
                 float linearDepth_sphere = (newViewDepth_sphere - _ProjectionParams.y) / (_ProjectionParams.z - _ProjectionParams.y);
                 linearDepth_sphere = saturate(linearDepth_sphere); // 确保在 0-1 范围
 
+                linearDepth_sphere = pow(linearDepth_sphere, 0.1); // 应用 Gamma 校正
+
                 return half4(linearDepth_sphere, 0, 0, 1); // 输出包含球形效果的线性深度
             }
             ENDHLSL
