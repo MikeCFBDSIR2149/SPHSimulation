@@ -9,22 +9,27 @@ public class SSFRenderFeature : ScriptableRendererFeature
     {
         public RenderPipelineAsset applicationRPAsset; // 应用的渲染管线资产
         public RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingPostProcessing;
-        public Material particleDepthMaterial; // 渲染深度的材质
-        public Material particleThicknessMaterial; // 渲染厚度的材质
-        public Material bilateralBlurMaterial; // 用于双边滤波的材质
+        public Material particleDepthMaterial;
+        public Material particleThicknessMaterial;
+        public Material bilateralBlurMaterial;
+        public Material gaussianBlurMaterial; 
         public Material finalShadingMaterial;
         
         [Header("Particle Settings")]
         [Range(0.01f, 1.0f)]
-        public float particleSizeMultiplier = 0.5f; // 粒子渲染大小
+        public float particleSizeMultiplier = 0.5f; // 粒子渲染大小乘数 (基于SmoothingRadiusH)
         
-        [Header("Smoothing Settings")]
-        [Range(1, 15)]
-        public int blurIterations = 5; // 模糊半径 (采样点数 = iterations*2+1)
+        [Header("BilateralBlur Smoothing Settings")]
+        [Range(1, 40)]
+        public int blurIterations = 5; // 模糊半径
         [Range(0.001f, 1.0f)]
-        public float depthSigma = 0.05f; // 深度权重 Sigma (控制深度相似性)
-        [Range(0.1f, 10.0f)]
-        public float spatialSigma = 2.0f; // 空间权重 Sigma (控制模糊范围)
+        public float depthSigma = 0.05f; // 深度权重 (深度相似性)
+        [Range(0.1f, 60f)]
+        public float spatialSigma = 2.0f; // 空间权重 (模糊范围)
+        
+        [Header("GaussianBlur Smoothing Settings")]
+        [Range(0f, 5.0f)]
+        public float blurAmount = 1.0f;
     }
 
     public SSFSettings settings = new SSFSettings();

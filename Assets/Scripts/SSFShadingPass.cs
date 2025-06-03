@@ -6,11 +6,11 @@ using UnityEngine.Rendering.Universal;
 public class SSFShadingPass : ScriptableRenderPass
 {
     private readonly SSFRenderFeature.SSFSettings settings;
-    private readonly Material shadingMaterial; // 用于最终着色的材质
+    private readonly Material shadingMaterial;
     private readonly SSFRenderFeature feature;
     private new readonly ProfilingSampler profilingSampler = new ProfilingSampler("SSF Shading Pass");
 
-    private RTHandle m_SmoothedDepthRT; // 需要从 SmoothPass 获取
+    private RTHandle m_SmoothedDepthRT;
     
     private static readonly int FluidSmoothedDepthTexture = Shader.PropertyToID("_FluidSmoothedDepthTexture");
     private static readonly int FluidThicknessTexture = Shader.PropertyToID("_FluidThicknessTexture");
@@ -22,19 +22,10 @@ public class SSFShadingPass : ScriptableRenderPass
         this.shadingMaterial = material;
         this.feature = feature;
     }
-
-    // 这个 Pass 不需要分配自己的 RT，它将直接画到相机目标
-    [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
-    public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
-    {
-       // 如果需要中间 RT，可以在这里分配
-       // 我们将直接画到相机颜色目标，所以不需要 ConfigureTarget
-    }
     
     [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
     public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
     {
-        // 尝试在这里获取 RTHandle
         if (feature?.SmoothPass != null)
         {
             m_SmoothedDepthRT = feature.SmoothPass.SmoothedDepthRT;
@@ -44,9 +35,6 @@ public class SSFShadingPass : ScriptableRenderPass
             Debug.LogError("Shading Pass CONFIGURE - Feature or SmoothPass is NULL!");
             m_SmoothedDepthRT = null;
         }
-
-        // 这个 Pass 不需要配置自己的目标，因为它会画到相机目标
-        // ConfigureTarget(renderingData.cameraData.renderer.cameraColorTargetHandle);
     }
 
     [Obsolete("Obsolete")]
@@ -80,11 +68,4 @@ public class SSFShadingPass : ScriptableRenderPass
         context.ExecuteCommandBuffer(cmd);
         CommandBufferPool.Release(cmd);
     }
-
-    public override void OnCameraCleanup(CommandBuffer cmd)
-    {
-        // 如果有临时 RT，在这里释放
-    }
-
-    // 注意: 这个 Pass 没有自己的 RT，所以不需要 Dispose
 }

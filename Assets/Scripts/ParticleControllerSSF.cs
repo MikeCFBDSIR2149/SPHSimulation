@@ -1,10 +1,11 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class ParticleControllerSSF : ParticleControllerGPU
 {
     private static readonly int ParticleSizeMultiplier = Shader.PropertyToID("_ParticleSizeMultiplier");
 
-    public static new ParticleControllerSSF Instance { get; private set; } // 单例
+    public new static ParticleControllerSSF Instance { get; private set; }
     
     [Header("SSF Settings")]
     public Material ssfDepthMaterial;
@@ -18,7 +19,7 @@ public class ParticleControllerSSF : ParticleControllerGPU
 
     private void Update()
     {
-        if (ssfDepthMaterial && particleBuffer != null) // 检查 base 类的 buffer 是否存在
+        if (ssfDepthMaterial && particleBuffer != null)
         {
             ssfDepthMaterial.SetFloat(SmoothingRadiusH, smoothingRadiusH);
             ssfDepthMaterial.SetBuffer(Particles, particleBuffer);
@@ -30,6 +31,11 @@ public class ParticleControllerSSF : ParticleControllerGPU
             ssfThicknessMaterial.SetBuffer(Particles, particleBuffer);
             ssfThicknessMaterial.SetFloat(ParticleSizeMultiplier, 1.0f);
         }
+    }
+
+    protected override void LateUpdate()
+    {
+        
     }
     
     // 获取粒子数据缓冲区 (用于RenderPass)

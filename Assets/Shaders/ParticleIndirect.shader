@@ -28,8 +28,7 @@ Shader "Custom/ParticleIndirect"
                 v2f o;
                 float4 pos = mul(_Properties[instanceID].mat, i.vertex);
                 o.vertex = UnityObjectToClipPos(pos);
-                // 这里给一个固定色，也可后续改为全局属性
-                o.color = fixed4(1,1,1,1); // 白色
+                o.color = fixed4(1,1,1,1);
                 return o;
             }
 

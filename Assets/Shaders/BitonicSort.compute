@@ -15,17 +15,14 @@ int _LevelMask;
 void CSBitonicSort(uint3 id : SV_DispatchThreadID)
 {
     uint i_thread = id.x;
-
-    // 计算比较距离 K (Stride)
-    uint K = 1u << (_Level - _LevelMask);
     
-    // 将线程 ID 映射到第一个数据索引 (idx1)
+    uint K = 1u << (_Level - _LevelMask);
+
     uint i_mod_K = i_thread & (K - 1u);
     uint i_div_K = i_thread & ~(K - 1u);
     uint idx1 = ((i_div_K << 1u) + i_mod_K);
     uint idx2 = idx1 + K;
-
-    // 检查越界
+    
     if (idx2 >= _NumEntries) {
         return;
     }
@@ -33,10 +30,8 @@ void CSBitonicSort(uint3 id : SV_DispatchThreadID)
     ParticleHash P_i = _Data[idx1];
     ParticleHash P_j = _Data[idx2];
     
-    // 如果 idx1 在这个大块的前半部分，则升序；后半部分，则降序。
     bool increasing = ((idx1 & (1u << (_Level + 1))) == 0);
     
-    // 如果 (P_i > P_j) 和 increasing 标志相同，则交换。
     if ((P_i.hash > P_j.hash) == increasing)
     {
         _Data[idx1] = P_j;

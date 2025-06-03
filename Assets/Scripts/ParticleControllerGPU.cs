@@ -147,7 +147,6 @@ public class ParticleControllerGPU : MonoBehaviour
     
     private void OnEnable()
     {
-        // Time.timeScale = 100f;
         PreCalculateConstants();
         InitializeParticlesCPU();
         CalculateGrids();
@@ -221,7 +220,7 @@ public class ParticleControllerGPU : MonoBehaviour
         int fluidCount = 0;
         while (fluidCount < targetParticleCount)
         {
-            float buffer = spacing * 0.2f; // 防止生成在边界上
+            float buffer = spacing * 0.2f;
             float x = Random.Range(buffer, maxBounds.x - buffer);
             float y = Random.Range(minBounds.y + buffer, maxBounds.y - buffer);
             float z = Random.Range(minBounds.z + buffer, - buffer);
@@ -233,7 +232,7 @@ public class ParticleControllerGPU : MonoBehaviour
                 acceleration = Vector3.zero,
                 density = 0f,
                 pressure = 0f,
-                type = 0 // 流体粒子
+                type = 0
             });
             fluidCount++;
             if (particles.Count < 999999)
@@ -393,14 +392,14 @@ public class ParticleControllerGPU : MonoBehaviour
         int numGroupsX_SPH = (actualParticleCount + threadsPerGroupX_SPH - 1) / threadsPerGroupX_SPH;
         int numGroupsX_Hash = (paddedParticleCount + threadsPerGroupX_SPH - 1) / threadsPerGroupX_SPH;
         int numGroupsX_Grid = (gridTotalCells + threadsPerGroupX_SPH - 1) / threadsPerGroupX_SPH;
-        int numGroupsX_Sort = (paddedParticleCount / 2 + threadsPerGroupX_Sort - 1) / threadsPerGroupX_Sort; // 排序调度 (N/2 个比较)
+        int numGroupsX_Sort = (paddedParticleCount / 2 + threadsPerGroupX_Sort - 1) / threadsPerGroupX_Sort;
         
         particleComputeShader.Dispatch(csCalculateHashKernelID, numGroupsX_Hash, 1, 1);
         
         DispatchSort(numGroupsX_Sort);
         
-        particleComputeShader.Dispatch(csClearGridInfoKernelID, numGroupsX_Grid, 1, 1); // 清除网格信息
-        particleComputeShader.Dispatch(csBuildGridInfoKernelID, numGroupsX_SPH, 1, 1); // 构建网格信息
+        particleComputeShader.Dispatch(csClearGridInfoKernelID, numGroupsX_Grid, 1, 1);
+        particleComputeShader.Dispatch(csBuildGridInfoKernelID, numGroupsX_SPH, 1, 1);
         
         particleComputeShader.Dispatch(csDensityKernelID, numGroupsX_SPH, 1, 1);
         particleComputeShader.Dispatch(csPressureKernelID, numGroupsX_SPH, 1, 1);
@@ -430,7 +429,7 @@ public class ParticleControllerGPU : MonoBehaviour
         // CheckSortResult(); 
     }
     
-    private void LateUpdate()
+    protected virtual void LateUpdate()
     { 
         if (propertiesBuffer == null || !particleMaterial || !particleMesh || argsBuffer == null) return;
         

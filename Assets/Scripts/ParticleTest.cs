@@ -16,9 +16,8 @@ public class ParticleTest : MonoBehaviour
         public Matrix4x4 mat;
     }
 
-    void Start()
+    private void Start()
     {
-        // 初始化粒子数据
         MeshProperties[] props = new MeshProperties[count];
         for (int i = 0; i < count; i++)
         {
@@ -35,7 +34,6 @@ public class ParticleTest : MonoBehaviour
         propertiesBuffer = new ComputeBuffer(count, stride, ComputeBufferType.Structured);
         propertiesBuffer.SetData(props);
 
-        // indirect args: index count, instance count, start index, base vertex, start instance
         uint[] args = new uint[5] {
             mesh.GetIndexCount(0), (uint)count,
             mesh.GetIndexStart(0), mesh.GetBaseVertex(0), 0
@@ -44,7 +42,7 @@ public class ParticleTest : MonoBehaviour
         argsBuffer.SetData(args);
     }
 
-    void Update()
+    private void Update()
     {
         if (propertiesBuffer == null || argsBuffer == null) return;
         material.SetBuffer("_Properties", propertiesBuffer);
@@ -54,7 +52,7 @@ public class ParticleTest : MonoBehaviour
             argsBuffer);
     }
 
-    void OnDestroy()
+    private void OnDestroy()
     {
         if (propertiesBuffer != null) propertiesBuffer.Release();
         if (argsBuffer != null) argsBuffer.Release();

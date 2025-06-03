@@ -24,9 +24,9 @@ public class SSFParticleRenderPass : ScriptableRenderPass
 
     public SSFParticleRenderPass(SSFRenderFeature.SSFSettings settings)
     {
-        this.settings = settings; // 接收 settings
+        this.settings = settings;
         this.renderPassEvent = settings.renderPassEvent;
-        profilingSampler = new ProfilingSampler("SSF Particle Pass"); // 初始化 Sampler
+        profilingSampler = new ProfilingSampler("SSF Particle Pass");
     }
 
     [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
@@ -54,10 +54,10 @@ public class SSFParticleRenderPass : ScriptableRenderPass
         {
             return;
         }
-        ComputeBuffer argsBuffer = particleController.GetArgsBuffer(); // 需要 GetArgsBuffer()
+        ComputeBuffer argsBuffer = particleController.GetArgsBuffer();
         Material depthMaterial = settings.particleDepthMaterial;
         Material thicknessMaterial = settings.particleThicknessMaterial;
-        Mesh particleMesh = particleController.particleMesh; // 需要 particleMesh
+        Mesh particleMesh = particleController.particleMesh;
         ComputeBuffer particleBuffer = particleController.GetParticleBuffer();
         
         if (argsBuffer == null || !depthMaterial || !thicknessMaterial || !particleMesh) return;
@@ -66,25 +66,25 @@ public class SSFParticleRenderPass : ScriptableRenderPass
 
         using (new ProfilingScope(cmd, profilingSampler))
         {
-            // 设置粒子数据 Buffer (需要确保材质能接收)
+            // 设置粒子数据 Buffer
             depthMaterial.SetBuffer(Particles, particleBuffer);
             thicknessMaterial.SetBuffer(Particles, particleBuffer);
-            depthMaterial.SetFloat(SmoothingRadiusH, particleController.smoothingRadiusH); // 需要 smoothingRadiusH
+            depthMaterial.SetFloat(SmoothingRadiusH, particleController.smoothingRadiusH);
             thicknessMaterial.SetFloat(SmoothingRadiusH, particleController.smoothingRadiusH);
 
-            // --- 深度通道 ---
-            cmd.SetRenderTarget(m_DepthRT); // 使用 RTHandle
+            // 深度
+            cmd.SetRenderTarget(m_DepthRT);
             cmd.ClearRenderTarget(false, true, Color.white * 1000f);
             depthMaterial.SetFloat(ParticleSizeMultiplier, settings.particleSizeMultiplier);
             cmd.DrawMeshInstancedIndirect(particleMesh, 0, depthMaterial, -1, argsBuffer, 0, null);
 
-            // --- 厚度通道 ---
-            cmd.SetRenderTarget(m_ThicknessRT); // 使用 RTHandle
+            // 厚度
+            cmd.SetRenderTarget(m_ThicknessRT);
             cmd.ClearRenderTarget(false, true, Color.black);
             thicknessMaterial.SetFloat(ParticleSizeMultiplier, settings.particleSizeMultiplier);
             cmd.DrawMeshInstancedIndirect(particleMesh, 0, thicknessMaterial, -1, argsBuffer, 0, null);
 
-            // --- 设置全局纹理 ---
+            // 设置全局纹理
             cmd.SetGlobalTexture(FluidDepthTexture, m_DepthRT); 
             cmd.SetGlobalTexture(FluidThicknessTexture, m_ThicknessRT);
         }
@@ -92,8 +92,7 @@ public class SSFParticleRenderPass : ScriptableRenderPass
         context.ExecuteCommandBuffer(cmd);
         CommandBufferPool.Release(cmd);
     }
-
-    // 用于释放 RTHandle
+    
     public void Dispose()
     {
         RTHandles.Release(m_DepthRT);

@@ -13,9 +13,9 @@ Shader "Custom/SSF_Thickness"
         {
             Tags { "LightMode"="UniversalForward" }
             Cull Off
-            ZWrite Off // 关闭深度写入
-            ZTest Always // 总是通过深度测试 (或者 LEqual 如果你想让被遮挡的粒子不贡献厚度)
-            Blend One One // *** 关键：使用加法混合 ***
+            ZWrite Off
+            ZTest Always
+            Blend One One
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -24,14 +24,15 @@ Shader "Custom/SSF_Thickness"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+            // 保持和外部设置对齐
             struct ParticleGPU
             {
                 float3 position;
-                float3 velocity;     // 即使不用也要占位，保持与 C# 结构对齐
-                float3 acceleration; // 保持对齐
-                float density;       // 保持对齐
-                float pressure;      // 保持对齐
-                int type;            // *** 添加或确保存在 ***
+                float3 velocity;
+                float3 acceleration;
+                float density;
+                float pressure;
+                int type;
             };
 
             StructuredBuffer<ParticleGPU> _Particles;
@@ -74,12 +75,9 @@ Shader "Custom/SSF_Thickness"
                 output.uv = input.positionOS.xy + 0.5;
                 return output;
             }
-
-            // 一个简单的厚度计算函数 (基于圆心距离)
+            
             float GetThickness(float distSq, float radius)
             {
-                // 可以使用更复杂的曲线，比如高斯或平滑核
-                // 这里用一个简单的抛物线，中心厚度为 1 * radius * 2，边缘为 0
                 return (1.0 - distSq) * radius * 2.0;
             }
 
@@ -87,16 +85,14 @@ Shader "Custom/SSF_Thickness"
             {
                 if (input.type == 1)
                 {
-                    discard; // 或者 clip(-1.0);
+                    discard;
                 }
                 float2 centeredUV = input.uv * 2.0 - 1.0;
                 float distSq = dot(centeredUV, centeredUV);
                 clip(1.0 - distSq); // 裁剪到圆内
 
-                // 计算厚度值
                 float thickness = GetThickness(distSq, input.radius);
 
-                // 输出厚度值 (R 通道)，由于是加法混合，它会被累加
                 return half4(thickness, 0, 0, 1);
             }
             ENDHLSL

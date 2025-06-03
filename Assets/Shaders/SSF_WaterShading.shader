@@ -1,23 +1,23 @@
-Shader "Custom/SSF_WaterShading" // 名称不变
+Shader "Custom/SSF_WaterShading"
 {
     Properties
     {
-        _WaterBaseColor ("Water Base Color", Color) = (0.1, 0.3, 0.4, 1.0) // 水体基色 (浅色)
-        _WaterDeepColor ("Water Deep Color", Color) = (0.0, 0.1, 0.2, 1.0) // 水体深色 (吸收色)
-        _RefractionStrength ("Refraction Strength", Range(0, 0.1)) = 0.02 // 折射强度
-        _ReflectionStrength ("Reflection Strength", Range(0, 1)) = 0.5   // 反射强度
-        _ThicknessMultiplier ("Thickness Multiplier", Range(0, 10)) = 1.0 // 厚度影响因子
-        _FresnelPower ("Fresnel Power", Range(0, 10)) = 5.0             // 菲涅尔指数
-        _EnvironmentCubemap ("Environment Cubemap", Cube) = "_Skybox" {} // 环境反射贴图
+        _WaterBaseColor ("Water Base Color", Color) = (0.1, 0.3, 0.4, 1.0)
+        _WaterDeepColor ("Water Deep Color", Color) = (0.0, 0.1, 0.2, 1.0)
+        _RefractionStrength ("Refraction Strength", Range(0, 0.1)) = 0.02
+        _ReflectionStrength ("Reflection Strength", Range(0, 1)) = 0.5
+        _ThicknessMultiplier ("Thickness Multiplier", Range(0, 10)) = 1.0
+        _FresnelPower ("Fresnel Power", Range(0, 10)) = 5.0
+        _EnvironmentCubemap ("Environment Cubemap", Cube) = "_Skybox" {}
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalPipeline" }
-        LOD 100
+        Tags { "RenderType"="Transparent" "Queue"="Transparent" "RenderPipeline"="UniversalPipeline" } // 改为 Transparent
 
         Pass
         {
-            ZTest Always Cull Off ZWrite Off
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -31,15 +31,15 @@ Shader "Custom/SSF_WaterShading" // 名称不变
             sampler2D _FluidSmoothedDepthTexture;
             sampler2D _FluidThicknessTexture;
 
-            TEXTURECUBE(_EnvironmentCubemap); // <--- 新增: 环境反射贴图
+            TEXTURECUBE(_EnvironmentCubemap);
             SAMPLER(sampler_EnvironmentCubemap);
 
-            float4 _WaterBaseColor;    // <--- 新增: 水体基色 (浅色)
-            float4 _WaterDeepColor;    // <--- 新增: 水体深色 (吸收色)
-            float _RefractionStrength; // <--- 新增: 折射强度
-            float _ReflectionStrength; // <--- 新增: 反射强度 (Cubemap)
-            float _ThicknessMultiplier; // <--- 新增: 厚度影响因子
-            float _FresnelPower;      // <--- 新增: 菲涅尔指数
+            float4 _WaterBaseColor;     // 水体基色
+            float4 _WaterDeepColor;     // 水体深色
+            float _RefractionStrength;  // 折射强度
+            float _ReflectionStrength;  // 反射强度
+            float _ThicknessMultiplier; // 厚度影响因子
+            float _FresnelPower;        // 菲涅尔指数
 
             struct Attributes
             {
@@ -51,8 +51,7 @@ Shader "Custom/SSF_WaterShading" // 名称不变
                 float4 positionCS : SV_POSITION;
                 float2 texcoord   : TEXCOORD0;
             };
-
-            // --- 顶点着色器 (Blitter 标准) ---
+            
             Varyings vert(Attributes input)
             {
                 Varyings output;
@@ -63,75 +62,95 @@ Shader "Custom/SSF_WaterShading" // 名称不变
                 return output;
             }
 
-            // --- 片元着色器 ---
+            float3 ReconstructViewPos(float2 screenUV, float ndcDepth, float4x4 invProjMatrix)
+            {
+                float2 ndcXY = screenUV * 2.0 - 1.0;
+                
+                float4 clipPos = float4(ndcXY, ndcDepth, 1.0);
+                
+                float4 viewPosH = mul(invProjMatrix, clipPos);
+
+                return viewPosH.xyz / viewPosH.w;
+            }
+            
             half4 frag (Varyings i) : SV_Target
             {
-                // 1. 采样深度 & 剔除背景
                 float depthNDC = tex2D(_FluidSmoothedDepthTexture, i.texcoord).r;
+
+                if (depthNDC > 1) { discard; }
+
+                // 重建世界坐标+计算法线
+                float3 viewPos = ReconstructViewPos(i.texcoord, depthNDC, UNITY_MATRIX_I_P);
+
+                // return half4(viewPos, 1.0);
                 
-                // 采样场景深度 (已经是 Linear 0-1)
-                float sceneLinear01Depth = SampleSceneDepth(i.texcoord);
-                // 将流体 NDC 深度转换为 Linear 0-1 深度
-                float fluidLinear01Depth = Linear01Depth(depthNDC, _ZBufferParams);
+                float2 texelSize = _CameraDepthTexture_TexelSize.xy;
+                
+                float ndcDepth_xp = tex2D(_FluidSmoothedDepthTexture, i.texcoord + float2(texelSize.x, 0)).r;
+                float ndcDepth_xn = tex2D(_FluidSmoothedDepthTexture, i.texcoord - float2(texelSize.x, 0)).r;
+                float ndcDepth_yp = tex2D(_FluidSmoothedDepthTexture, i.texcoord + float2(0, texelSize.y)).r;
+                float ndcDepth_yn = tex2D(_FluidSmoothedDepthTexture, i.texcoord - float2(0, texelSize.y)).r;
+                
+                float3 pos_xp_View = ReconstructViewPos(i.texcoord + float2(texelSize.x, 0), ndcDepth_xp, UNITY_MATRIX_I_P);
+                float3 pos_xn_View = ReconstructViewPos(i.texcoord - float2(texelSize.x, 0), ndcDepth_xn, UNITY_MATRIX_I_P);
+                float3 pos_yp_View = ReconstructViewPos(i.texcoord + float2(0, texelSize.y), ndcDepth_yp, UNITY_MATRIX_I_P);
+                float3 pos_yn_View = ReconstructViewPos(i.texcoord - float2(0, texelSize.y), ndcDepth_yn, UNITY_MATRIX_I_P);
+                
+                float3 ddx_fwd_View = pos_xp_View - viewPos;
+                float3 ddx_bwd_View = viewPos - pos_xn_View;
+                float3 ddy_fwd_View = pos_yp_View - viewPos;
+                float3 ddy_bwd_View = viewPos - pos_yn_View;
+                
+                float3 final_ddx_View = (dot(ddx_fwd_View, ddx_fwd_View) < dot(ddx_bwd_View, ddx_bwd_View)) ? ddx_fwd_View : ddx_bwd_View;
+                float3 final_ddy_View = (dot(ddy_fwd_View, ddy_fwd_View) < dot(ddy_bwd_View, ddy_bwd_View)) ? ddy_fwd_View : ddy_bwd_View;
 
-                // 比较：如果流体深度 >= 场景深度 (意味着流体在场景后面或完全相同)，则丢弃
-                // 减去一个很小的值 (Epsilon) 是为了处理精度问题，防止 Z-fighting
-                // if (fluidLinear01Depth >= sceneLinear01Depth - 0.0001)
-                // {
-                //    discard;
-                // }
-                if (depthNDC > 0.999) { discard; }
+                float view_depth_thresh = 0.1;
+                if (abs(pos_xp_View.z - viewPos.z) > view_depth_thresh) final_ddx_View = ddx_bwd_View;
+                if (abs(pos_xn_View.z - viewPos.z) > view_depth_thresh) final_ddx_View = ddx_fwd_View;
+                if (abs(pos_yp_View.z - viewPos.z) > view_depth_thresh) final_ddy_View = ddy_bwd_View;
+                if (abs(pos_yn_View.z - viewPos.z) > view_depth_thresh) final_ddy_View = ddy_fwd_View;
+                
+                float3 viewNormal = normalize(cross(final_ddx_View, final_ddy_View)); 
 
-                // 2. 重建世界坐标 & 计算法线 (与之前相同)
+                // return half4(viewNormal, 1.0);
+
+                float3 worldNormal = mul((float3x3)UNITY_MATRIX_I_V, viewNormal);
+                worldNormal = -normalize(worldNormal);
+
+                // return half4(worldNormal, 1.0);
+                
                 float3 worldPos = ComputeWorldSpacePosition(i.texcoord, depthNDC, UNITY_MATRIX_I_VP);
-                float3 ddx_worldPos = ddx(worldPos);
-                float3 ddy_worldPos = ddy(worldPos);
-                float3 worldNormal = normalize(cross(ddy_worldPos, ddx_worldPos));
 
-                // 健壮性检查
-                // 计算叉乘结果的长度平方 (避免开方)
-                float lenSq = dot(worldNormal, worldNormal);
+                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos); // 世界空间观察方向
 
-                // 阈值
-                const float Epsilon = 1e-6;
-                if (lenSq < Epsilon || !isfinite(worldNormal.x) || !isfinite(worldNormal.y) || !isfinite(worldNormal.z) )
-                {
-                    worldNormal = float3(0.0, 1.0, 0.0);
-                }
-                else
-                {
-                    worldNormal = normalize(worldNormal);
-                }
-                
-                // 3. 获取视角方向 (世界空间)
-                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
-
-                // 4. 计算菲涅尔项
+                // 菲涅尔项
                 float fresnelTerm = pow(1.0 - saturate(dot(viewDir, worldNormal)), _FresnelPower);
+                fresnelTerm = saturate(fresnelTerm);
 
-                // 5. 计算折射
-                float4 clipPos = TransformWorldToHClip(worldPos);
-                float2 screenUV = clipPos.xy / clipPos.w;
-                float2 sceneUV = screenUV * 0.5 + 0.5;
-                #if UNITY_UV_STARTS_AT_TOP
-                    sceneUV.y = 1.0 - sceneUV.y;
-                #endif
-                float2 refractOffset = worldNormal.xy * _RefractionStrength;
+                // 环境反射
+                float3 reflectDir = reflect(-viewDir, worldNormal);
+                half4 reflectionColor = SAMPLE_TEXTURECUBE_LOD(_EnvironmentCubemap, sampler_EnvironmentCubemap, reflectDir, 0) * _ReflectionStrength;
+
+                // 折射
+                float4 screenPos = TransformWorldToHClip(worldPos);
+                float2 sceneUV = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
+                
+                // 基于法线和深度进行扭曲
+                float2 refractOffset = worldNormal.xy * _RefractionStrength * (1.0 - depthNDC); // 深度越大，折射越小
                 half4 refractionColor = SAMPLE_TEXTURE2D(_CameraOpaqueTexture, sampler_LinearClamp, sceneUV + refractOffset);
 
-                // 6. 计算反射
-                float3 reflectDir = reflect(-viewDir, worldNormal);
-                half4 reflectionColor = SAMPLE_TEXTURECUBE(_EnvironmentCubemap, sampler_EnvironmentCubemap, reflectDir) * _ReflectionStrength;
-
-                // 7. 计算水体颜色 (基于厚度)
+                // 水体自身颜色 (基于厚度)
                 float thickness = tex2D(_FluidThicknessTexture, i.texcoord).r;
-                half4 waterColor = lerp(_WaterBaseColor, _WaterDeepColor, saturate(thickness * _ThicknessMultiplier));
+                half4 waterAbsorptionColor = lerp(_WaterBaseColor, _WaterDeepColor, saturate(thickness * _ThicknessMultiplier));
+                half4 underwaterColor = refractionColor * waterAbsorptionColor;
 
-                // 8. 混合最终颜色
-                half4 underwaterColor = refractionColor * waterColor;
+                // 最终混合
                 half4 finalColor = lerp(underwaterColor, reflectionColor, fresnelTerm);
+                
+                float alpha = saturate(lerp(0.2, 0.95, saturate(thickness * _ThicknessMultiplier * 0.1)) + fresnelTerm);
+                alpha = saturate(alpha);
 
-                return half4(finalColor.rgb, 1.0);
+                return half4(finalColor.rgb, alpha);
             }
             ENDHLSL
         }
