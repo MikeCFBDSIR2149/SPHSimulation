@@ -66,7 +66,7 @@ public class SSFRenderFeature : ScriptableRendererFeature
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        if (GraphicsSettings.defaultRenderPipeline != settings.applicationRPAsset || !SimulationGlobalStatus.Instance.inSimulation) return;
+        if (GraphicsSettings.defaultRenderPipeline != settings.applicationRPAsset || !SimulationGlobalStatus.Instance.InSimulation) return;
         if (ssfParticleRenderPass == null || ssfSmoothPass == null || !settings.bilateralBlurMaterial) return;
 
         renderer.EnqueuePass(ssfParticleRenderPass);

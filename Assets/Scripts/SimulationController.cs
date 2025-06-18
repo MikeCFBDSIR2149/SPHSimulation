@@ -1,4 +1,5 @@
 using TMPro;
+using UI;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -19,7 +20,7 @@ public class SimulationController : MonoBehaviour
     public TextMeshProUGUI simulationTypeText;
     public TextMeshProUGUI undefinedWarningText;
 
-    public SimulationType CurrentSimulationType { get; private set; }
+    private SimulationType CurrentSimulationType { get; set; }
 
     private void Start()
     {
@@ -30,7 +31,7 @@ public class SimulationController : MonoBehaviour
     
     private void SetTypeText()
     {
-        simulationTypeText.text = "Current Type: " + CurrentSimulationType;
+        simulationTypeText.text = "当前模拟类型: " + CurrentSimulationType;
         undefinedWarningText.enabled = CurrentSimulationType == SimulationType.Undefined;
     }
 
@@ -67,18 +68,33 @@ public class SimulationController : MonoBehaviour
         {
             simulationType = SimulationType.Undefined;
         }
-        if (SimulationGlobalStatus.Instance.inSimulation) return;
+        if (SimulationGlobalStatus.Instance.InSimulation) return;
         if (CurrentSimulationType == simulationType) return;
         CurrentSimulationType = simulationType;
         GraphicsSettings.defaultRenderPipeline = ReturnCurrentRPAsset();
         SetTypeText();
+        switch (CurrentSimulationType)
+        {
+            case SimulationType.GPU:
+                UIManager.Instance.OpenUI("SimGPUCanvas");
+                UIManager.Instance.CloseUI("SimSSFCanvas");
+                break;
+            case SimulationType.SSF:
+                UIManager.Instance.OpenUI("SimSSFCanvas");
+                UIManager.Instance.CloseUI("SimGPUCanvas");
+                break;
+            default:
+                UIManager.Instance.CloseUI("SimGPUCanvas");
+                UIManager.Instance.CloseUI("SimSSFCanvas");
+                break;
+        }
     }
 
     public void StartSimulation()
     {
         MonoBehaviour controller = ReturnCurrentController();
         if (!controller) return;
-        SimulationGlobalStatus.Instance.inSimulation = true;
+        SimulationGlobalStatus.Instance.ChangeSimulationStatus(true);
         if (controller.enabled == false)
         {
             controller.enabled = true;
@@ -93,6 +109,6 @@ public class SimulationController : MonoBehaviour
         {
             controller.enabled = false;
         }
-        SimulationGlobalStatus.Instance.inSimulation = false;
+        SimulationGlobalStatus.Instance.ChangeSimulationStatus(false);
     }
 }

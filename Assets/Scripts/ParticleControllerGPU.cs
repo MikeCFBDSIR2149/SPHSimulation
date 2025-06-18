@@ -105,12 +105,12 @@ public class ParticleControllerGPU : MonoBehaviour
 
     // Parameters
     [Header("Parameters")]
-    public float particleMass = 0.02f;          // 粒子模拟质量
-    public float pressureExponentGamma = 7f;    // Tait 状态方程中的指数
-    public Vector3 gravity = new Vector3(0.0f, -9.81f, 0.0f); // 重力加速度
-    public float smoothingRadiusH = 0.1f;       // 平滑核影响半径
+    protected float particleMass = 0.02f;          // 粒子模拟质量
+    protected float pressureExponentGamma = 7f;    // Tait 状态方程中的指数
+    protected Vector3 gravity = new Vector3(0.0f, -9.81f, 0.0f); // 重力加速度
+    protected internal float smoothingRadiusH = 0.1f;       // 平滑核影响半径
     private float hSquared;                     // h^2 预计算
-    public float boundaryDamping;               // 边界碰撞时的速度衰减系数
+    protected float boundaryDamping;               // 边界碰撞时的速度衰减系数
     
     [Header("Parameters (Support Dynamic Change in Simulation)")]
     public float restDensityRho = 1000f;        // 水的静止密度
@@ -119,11 +119,11 @@ public class ParticleControllerGPU : MonoBehaviour
     
     // Settings
     [Header("Settings")]
-    public int targetParticleCount;             // 目标粒子数
-    private int actualParticleCount;            // 实际总粒子数
-    private int paddedParticleCount;            // Bitonic Sort 要求 2^n，因此必须填补未满的粒子数量
     public int boundaryLayers = 4;              // 边界层数
     public float spacingParameter = 1.8f;       // 粒子间距参数，影响粒子分布密度 (边界粒子)
+    protected int targetParticleCount;          // 目标粒子数
+    private int actualParticleCount;            // 实际总粒子数
+    private int paddedParticleCount;            // Bitonic Sort 要求 2^n，因此必须填补未满的粒子数量
     public Vector3 spawnVolumeCenter = Vector3.zero;
     public Vector3 spawnVolumeSize;
     
@@ -132,7 +132,7 @@ public class ParticleControllerGPU : MonoBehaviour
     
     [Header("Rendering Settings (Unavailable if using SSF)")]
     public Material particleMaterial;
-    public float particleRenderScale;
+    protected float particleRenderScale;
     
     // Kernel Constant (核函数常数)
     private float poly6Constant;
@@ -147,11 +147,34 @@ public class ParticleControllerGPU : MonoBehaviour
     
     private void OnEnable()
     {
+        GetDataFromParams();
         PreCalculateConstants();
         InitializeParticlesCPU();
         CalculateGrids();
         CalculatePaddedSize();
         InitializeComputeShader();
+    }
+    
+    private void GetDataFromParams()
+    {
+        if (ParticleControllerParams.Instance == null)
+        {
+            Debug.LogError("ParticleControllerParams instance not found!");
+            return;
+        }
+        
+        targetParticleCount = ParticleControllerParams.Instance.targetParticleCount;
+        particleMass = ParticleControllerParams.Instance.particleMass;
+        pressureExponentGamma = ParticleControllerParams.Instance.pressureExponentGamma;
+        gravity = ParticleControllerParams.Instance.gravity;
+        smoothingRadiusH = ParticleControllerParams.Instance.smoothingRadiusH;
+        boundaryDamping = ParticleControllerParams.Instance.boundaryDamping;
+        
+        restDensityRho = ParticleControllerParams.Instance.restDensityRho;
+        gasConstantB = ParticleControllerParams.Instance.gasConstantB;
+        viscosityMu = ParticleControllerParams.Instance.viscosityMu;
+
+        particleRenderScale = ParticleControllerParams.Instance.particleRenderScale;
     }
     
     private void PreCalculateConstants()
@@ -384,6 +407,10 @@ public class ParticleControllerGPU : MonoBehaviour
     private void FixedUpdate()
     {
         if (particleBuffer == null || !particleComputeShader) return;
+        
+        restDensityRho = ParticleControllerParams.Instance.restDensityRho;
+        gasConstantB = ParticleControllerParams.Instance.gasConstantB;
+        viscosityMu = ParticleControllerParams.Instance.viscosityMu;
         
         particleComputeShader.SetFloat(RestDensityRho, restDensityRho);
         particleComputeShader.SetFloat(GasConstantB, gasConstantB);
