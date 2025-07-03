@@ -97,16 +97,16 @@ Shader "Custom/SSF_Depth"
                 float viewDepth_billboard_plane = LinearEyeDepth(input.positionCS.z / input.positionCS.w, _ZBufferParams);
                 float zOffset = sqrt(max(0.0, 1.0 - distSq)) * input.radius;
                 float newViewDepth_sphere = viewDepth_billboard_plane - zOffset;
-                
-                float4 clipPos_sphere = mul(UNITY_MATRIX_P, float4(0,0, newViewDepth_sphere, 1.0));
+
+                float4 clipPos_sphere = mul(UNITY_MATRIX_P, float4(0,0, -newViewDepth_sphere, 1.0));
                 float ndcDepth_sphere = clipPos_sphere.z / clipPos_sphere.w;
                 
-                if (newViewDepth_sphere < _ProjectionParams.y)
-                {
-                    ndcDepth_sphere = 0.0;
-                }
+                // if (newViewDepth_sphere > _ProjectionParams.z)
+                // {
+                //     ndcDepth_sphere = 1.0;
+                // }
 
-                return half4(ndcDepth_sphere, ndcDepth_sphere, ndcDepth_sphere, 1.0);
+                return half4(ndcDepth_sphere, 0, 1.0, 1.0);
             }
             ENDHLSL
         }

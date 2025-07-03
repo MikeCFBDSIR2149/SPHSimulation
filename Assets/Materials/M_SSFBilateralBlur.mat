@@ -29,9 +29,9 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BlurRadius: 30
-    - _DepthSigma: 0.3
-    - _SpatialSigma: 25
+    - _BlurRadius: 24
+    - _DepthSigma: 0.386
+    - _SpatialSigma: 15.8
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

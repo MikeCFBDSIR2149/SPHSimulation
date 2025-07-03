@@ -21,11 +21,11 @@ MonoBehaviour:
     bilateralBlurMaterial: {fileID: 2100000, guid: 20d0ec51fef4f4f7b873dc9852df3abd, type: 2}
     gaussianBlurMaterial: {fileID: 2100000, guid: 80d0b9967f4f5fd4aa0a7ab139b25c1a, type: 2}
     finalShadingMaterial: {fileID: 2100000, guid: 7a9b806d5303e444b90d04e83f376653, type: 2}
-    particleSizeMultiplier: 0.08
-    blurIterations: 30
-    depthSigma: 0.3
-    spatialSigma: 25
-    blurAmount: 3
+    particleSizeMultiplier: 0.14
+    blurIterations: 24
+    depthSigma: 0.386
+    spatialSigma: 15.8
+    blurAmount: 1.47
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -56,7 +56,7 @@ MonoBehaviour:
   m_RendererFeatureMap: ad6b866f10d7b46c55f8ffe94c635ff8
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
-  postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
+  postProcessData: {fileID: 0}
   m_AssetVersion: 2
   m_OpaqueLayerMask:
     serializedVersion: 2

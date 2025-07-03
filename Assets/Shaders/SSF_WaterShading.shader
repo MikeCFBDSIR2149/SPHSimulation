@@ -9,6 +9,7 @@ Shader "Custom/SSF_WaterShading"
         _ThicknessMultiplier ("Thickness Multiplier", Range(0, 10)) = 1.0
         _FresnelPower ("Fresnel Power", Range(0, 10)) = 5.0
         _EnvironmentCubemap ("Environment Cubemap", Cube) = "_Skybox" {}
+        _DepthBias ("Depth Bias", Float) = 0.01
     }
     SubShader
     {
@@ -40,6 +41,7 @@ Shader "Custom/SSF_WaterShading"
             float _ReflectionStrength;  // 反射强度
             float _ThicknessMultiplier; // 厚度影响因子
             float _FresnelPower;        // 菲涅尔指数
+            float _DepthBias;           // 深度偏移量
 
             struct Attributes
             {
@@ -75,12 +77,43 @@ Shader "Custom/SSF_WaterShading"
             
             half4 frag (Varyings i) : SV_Target
             {
-                float depthNDC = tex2D(_FluidSmoothedDepthTexture, i.texcoord).r;
+                float fluid_reversed_ndcDepth = tex2D(_FluidSmoothedDepthTexture, i.texcoord).r;
+                // return half4(fluid_reversed_ndcDepth, fluid_reversed_ndcDepth, fluid_reversed_ndcDepth, 1);
+                // if (fluid_reversed_ndcDepth > 0.9999) fluid_reversed_ndcDepth = 0;
+                float fluid_standard_linearDepth = LinearEyeDepth(fluid_reversed_ndcDepth, _ZBufferParams);
+                
+                // return half4(fluid_standard_linearDepth, fluid_standard_linearDepth, fluid_standard_linearDepth, 1);
+                
+                float scene_reversed_ndcDepth = SampleSceneDepth(i.texcoord);
+                // return half4(scene_reversed_ndcDepth,scene_reversed_ndcDepth,scene_reversed_ndcDepth,1);
+                float scene_standard_linearDepth = LinearEyeDepth(scene_reversed_ndcDepth, _ZBufferParams);
+                // return half4(scene_standard_linearDepth, scene_standard_linearDepth, scene_standard_linearDepth, 1);
 
-                if (depthNDC > 1) { discard; }
+                // if (fluid_standard_linearDepth < 0.001) discard;
+                //
+                // if (fluid_standard_linearDepth < scene_standard_linearDepth - 0.01)
+                //     return half4(1, 0, 0, 1); // RED
+                //
+                // if (fluid_standard_linearDepth > scene_standard_linearDepth + 0.01)
+                //     return half4(0, 1, 0, 1); // GREEN
+                //
+                // return half4(0, 0, 1, 1); // EQUAL
 
-                // 重建世界坐标+计算法线
-                float3 viewPos = ReconstructViewPos(i.texcoord, depthNDC, UNITY_MATRIX_I_P);
+                // return half4(scene_standard_linearDepth,scene_standard_linearDepth,scene_standard_linearDepth,1);
+
+                // return half4(fluid_standard_linearDepth, fluid_standard_linearDepth, fluid_standard_linearDepth, 1);
+                
+                if (scene_standard_linearDepth < fluid_standard_linearDepth + _DepthBias)
+                {
+                    discard;
+                }
+
+                if (fluid_reversed_ndcDepth == 0)
+                {
+                    discard;
+                }
+
+                float3 viewPos = ReconstructViewPos(i.texcoord, fluid_reversed_ndcDepth, UNITY_MATRIX_I_P);
 
                 // return half4(viewPos, 1.0);
                 
@@ -119,7 +152,7 @@ Shader "Custom/SSF_WaterShading"
 
                 // return half4(worldNormal, 1.0);
                 
-                float3 worldPos = ComputeWorldSpacePosition(i.texcoord, depthNDC, UNITY_MATRIX_I_VP);
+                float3 worldPos = ComputeWorldSpacePosition(i.texcoord, fluid_reversed_ndcDepth, UNITY_MATRIX_I_VP);
 
                 float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos); // 世界空间观察方向
 
@@ -136,7 +169,7 @@ Shader "Custom/SSF_WaterShading"
                 float2 sceneUV = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
                 
                 // 基于法线和深度进行扭曲
-                float2 refractOffset = worldNormal.xy * _RefractionStrength * (1.0 - depthNDC); // 深度越大，折射越小
+                float2 refractOffset = worldNormal.xy * _RefractionStrength * (1.0 - fluid_reversed_ndcDepth); // 深度越大，折射越小
                 half4 refractionColor = SAMPLE_TEXTURE2D(_CameraOpaqueTexture, sampler_LinearClamp, sceneUV + refractOffset);
 
                 // 水体自身颜色 (基于厚度)

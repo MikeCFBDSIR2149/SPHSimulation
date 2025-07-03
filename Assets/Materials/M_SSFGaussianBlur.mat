@@ -29,7 +29,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _BlurAmount: 3
+    - _BlurAmount: 1.47
     - _BlurRadius: 1
     m_Colors:
     - _BlurDirection: {r: 0, g: 0.2, b: 0, a: 0}

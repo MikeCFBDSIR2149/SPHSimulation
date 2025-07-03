@@ -35,7 +35,7 @@ public class SimulationController : MonoBehaviour
         undefinedWarningText.enabled = CurrentSimulationType == SimulationType.Undefined;
     }
 
-    private MonoBehaviour ReturnCurrentController()
+    internal MonoBehaviour ReturnCurrentController()
     {
         return CurrentSimulationType switch
         {

@@ -63,7 +63,7 @@ Shader "Custom/SSF_BilateralBlur_Blitter" // 改个名字以示区分
             {
                 float centerDepth = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, i.uv).r;
 
-                if (centerDepth >= 0.999)
+                if (centerDepth == 0)
                 {
                    return centerDepth;
                 }
@@ -78,7 +78,7 @@ Shader "Custom/SSF_BilateralBlur_Blitter" // 改个名字以示区分
                     float2 sampleUV = i.uv + offset;
                     float sampleDepth = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, sampleUV).r;
 
-                    if (sampleDepth >= 0.999)
+                    if (sampleDepth <= 0)
                     {
                         continue;
                     }

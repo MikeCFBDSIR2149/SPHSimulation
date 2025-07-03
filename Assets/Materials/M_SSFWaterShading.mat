@@ -24,7 +24,7 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _EnvironmentCubemap:
-        m_Texture: {fileID: 8900000, guid: 99af420a4ccafa74abdc47436d8b0685, type: 3}
+        m_Texture: {fileID: 8900000, guid: 1153dc89e66880c4eb7adc16ba588855, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _FluidSmoothedDepthTexture:
@@ -37,12 +37,13 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _FresnelPower: 3
-    - _ReflectionStrength: 0.6
-    - _RefractionStrength: 0.05
-    - _ThicknessMultiplier: 3
+    - _DepthBias: -40
+    - _FresnelPower: 1.77
+    - _ReflectionStrength: 0.377
+    - _RefractionStrength: 0
+    - _ThicknessMultiplier: 2.15
     m_Colors:
-    - _WaterBaseColor: {r: 0.65471697, g: 0.9337411, b: 1, a: 1}
-    - _WaterDeepColor: {r: 0, g: 0.36792454, b: 0.4415095, a: 1}
+    - _WaterBaseColor: {r: 0, g: 0.9470236, b: 0.98490566, a: 0.827451}
+    - _WaterDeepColor: {r: 0.123510085, g: 0.40066394, b: 0.78867924, a: 0.7607843}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

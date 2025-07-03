@@ -74,7 +74,7 @@ public class SSFParticleRenderPass : ScriptableRenderPass
 
             // 深度
             cmd.SetRenderTarget(m_DepthRT);
-            cmd.ClearRenderTarget(false, true, Color.white * 1000f);
+            cmd.ClearRenderTarget(false, true, Color.black);
             depthMaterial.SetFloat(ParticleSizeMultiplier, settings.particleSizeMultiplier);
             cmd.DrawMeshInstancedIndirect(particleMesh, 0, depthMaterial, -1, argsBuffer, 0, null);
 
