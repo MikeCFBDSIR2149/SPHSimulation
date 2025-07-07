@@ -23,8 +23,7 @@ Shader "Custom/SSF_Thickness"
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            // 保持和外部设置对齐
+            
             struct ParticleGPU
             {
                 float3 position;

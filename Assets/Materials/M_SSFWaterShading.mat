@@ -37,13 +37,14 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _DepthBias: -40
-    - _FresnelPower: 1.77
-    - _ReflectionStrength: 0.377
-    - _RefractionStrength: 0
-    - _ThicknessMultiplier: 2.15
+    - _AbsorptionFalloff: 1.5
+    - _DepthBias: -42
+    - _FresnelPower: 4.5
+    - _ReflectionStrength: 0.72
+    - _RefractionStrength: 0.04
+    - _ThicknessMultiplier: 1.8
     m_Colors:
-    - _WaterBaseColor: {r: 0, g: 0.9470236, b: 0.98490566, a: 0.827451}
+    - _WaterBaseColor: {r: 0, g: 0.6170721, b: 0.9843137, a: 0.827451}
     - _WaterDeepColor: {r: 0.123510085, g: 0.40066394, b: 0.78867924, a: 0.7607843}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

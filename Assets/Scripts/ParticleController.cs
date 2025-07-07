@@ -153,8 +153,6 @@ public class ParticleController : MonoBehaviour
             
             if (pi.density < 0.0001f) pi.density = restDensityRho;
             
-            // pi.volume = pi.mass / pi.density;
-            
             // 计算压力
             pi.pressure = gasConstantB * (Mathf.Pow(pi.density / restDensityRho, pressureExponentGamma) - 1);
             

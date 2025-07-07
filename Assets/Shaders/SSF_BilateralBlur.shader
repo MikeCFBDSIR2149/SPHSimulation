@@ -1,4 +1,4 @@
-Shader "Custom/SSF_BilateralBlur_Blitter" // 改个名字以示区分
+Shader "Custom/SSF_BilateralBlur"
 {
     Properties
     {

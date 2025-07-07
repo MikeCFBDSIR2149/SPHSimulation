@@ -100,11 +100,6 @@ Shader "Custom/SSF_Depth"
 
                 float4 clipPos_sphere = mul(UNITY_MATRIX_P, float4(0,0, -newViewDepth_sphere, 1.0));
                 float ndcDepth_sphere = clipPos_sphere.z / clipPos_sphere.w;
-                
-                // if (newViewDepth_sphere > _ProjectionParams.z)
-                // {
-                //     ndcDepth_sphere = 1.0;
-                // }
 
                 return half4(ndcDepth_sphere, 0, 1.0, 1.0);
             }

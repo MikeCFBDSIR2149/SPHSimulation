@@ -21,7 +21,7 @@ MonoBehaviour:
     bilateralBlurMaterial: {fileID: 2100000, guid: 20d0ec51fef4f4f7b873dc9852df3abd, type: 2}
     gaussianBlurMaterial: {fileID: 2100000, guid: 80d0b9967f4f5fd4aa0a7ab139b25c1a, type: 2}
     finalShadingMaterial: {fileID: 2100000, guid: 7a9b806d5303e444b90d04e83f376653, type: 2}
-    particleSizeMultiplier: 0.14
+    particleSizeMultiplier: 0.1
     blurIterations: 24
     depthSigma: 0.386
     spatialSigma: 15.8

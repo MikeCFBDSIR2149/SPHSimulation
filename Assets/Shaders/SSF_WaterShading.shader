@@ -154,7 +154,7 @@ Shader "Custom/SSF_WaterShading"
                 
                 float3 worldPos = ComputeWorldSpacePosition(i.texcoord, fluid_reversed_ndcDepth, UNITY_MATRIX_I_VP);
 
-                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos); // 世界空间观察方向
+                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
 
                 // 菲涅尔项
                 float fresnelTerm = pow(1.0 - saturate(dot(viewDir, worldNormal)), _FresnelPower);

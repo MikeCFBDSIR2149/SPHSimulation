@@ -1,4 +1,4 @@
-Shader "Hidden/SSF_GaussianBlur"
+Shader "Custom/SSF_GaussianBlur"
 {
     Properties
     {
@@ -11,7 +11,6 @@ Shader "Hidden/SSF_GaussianBlur"
 
         Pass
         {
-            Name "GAUSSIAN_BLUR"
             ZTest Always
             Cull Off
             ZWrite Off

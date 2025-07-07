@@ -1,11 +1,10 @@
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class ParticleControllerSSF : ParticleControllerGPU
 {
     private static readonly int ParticleSizeMultiplier = Shader.PropertyToID("_ParticleSizeMultiplier");
 
-    public new static ParticleControllerSSF Instance { get; private set; }
+    public static ParticleControllerSSF Instance { get; private set; }
     
     [Header("SSF Settings")]
     public Material ssfDepthMaterial;

@@ -6,7 +6,7 @@ using Random = UnityEngine.Random;
 
 public class ParticleControllerGPU : MonoBehaviour
 {
-    public static ParticleControllerGPU Instance { get; private set; } // 单例
+    private static ParticleControllerGPU Instance { get; set; } // 单例
     
     // 粒子
     [StructLayout(LayoutKind.Sequential)]
@@ -46,17 +46,17 @@ public class ParticleControllerGPU : MonoBehaviour
     [Header("GPU Compute")]
     public ComputeShader particleComputeShader;
     public ComputeShader bitonicSortShader;
-    public ComputeBuffer particleBuffer;
+    protected ComputeBuffer particleBuffer;
     private ComputeBuffer propertiesBuffer;
     protected ComputeBuffer argsBuffer;
-    public ComputeBuffer particleHashBuffer;
-    public ComputeBuffer gridInfoBuffer;
+    private ComputeBuffer particleHashBuffer;
+    private ComputeBuffer gridInfoBuffer;
     
     private const int threadsPerGroupX_SPH = 64;
     private const int threadsPerGroupX_Sort = 256;
 
-    internal Vector3Int gridSize;                // 网格尺寸 (网格数量的尺寸)
-    internal Vector3 gridWorldMin;               // 网格世界坐标最小值
+    private Vector3Int gridSize;                // 网格尺寸 (网格数量的尺寸)
+    private Vector3 gridWorldMin;               // 网格世界坐标最小值
     private int gridTotalCells;
     
     private ParticleGPU[] particleDataArray;
@@ -67,7 +67,7 @@ public class ParticleControllerGPU : MonoBehaviour
     protected static readonly int Particles = Shader.PropertyToID("_Particles");
     private static readonly int ActualParticleCount = Shader.PropertyToID("_ActualParticleCount");
     private static readonly int PaddedParticleCount = Shader.PropertyToID("_PaddedParticleCount");
-    static internal readonly int ParticleMass = Shader.PropertyToID("_ParticleMass");
+    private static readonly int ParticleMass = Shader.PropertyToID("_ParticleMass");
     private static readonly int RestDensityRho = Shader.PropertyToID("_RestDensityRho");
     private static readonly int GasConstantB = Shader.PropertyToID("_GasConstantB");
     private static readonly int PressureExponentGamma = Shader.PropertyToID("_PressureExponentGamma");
@@ -106,18 +106,21 @@ public class ParticleControllerGPU : MonoBehaviour
 
     // Interactions
     private ComputeBuffer particleEffectorBuffer;
+    private ComputeBuffer particleEffectorForcesBackBuffer;
     private int csInteractKernelID;
+    private float[] effectorForcesReadback;
     private static readonly int EffectorCount = Shader.PropertyToID("_EffectorCount");
     private static readonly int Effectors = Shader.PropertyToID("_Effectors");
+    private static readonly int EffectorForces = Shader.PropertyToID("_EffectorForces");
 
     // Parameters
     [Header("Parameters")]
-    protected internal float particleMass = 0.02f;          // 粒子模拟质量
-    protected float pressureExponentGamma = 7f;    // Tait 状态方程中的指数
-    protected Vector3 gravity = new Vector3(0.0f, -9.81f, 0.0f); // 重力加速度
+    private float particleMass = 0.02f;          // 粒子模拟质量
+    private float pressureExponentGamma = 7f;    // Tait 状态方程中的指数
+    private Vector3 gravity = new Vector3(0.0f, -9.81f, 0.0f); // 重力加速度
     protected internal float smoothingRadiusH = 0.1f;       // 平滑核影响半径
     private float hSquared;                     // h^2 预计算
-    protected float boundaryDamping;               // 边界碰撞时的速度衰减系数
+    private float boundaryDamping;               // 边界碰撞时的速度衰减系数
     
     [Header("Parameters (Support Dynamic Change in Simulation)")]
     public float restDensityRho = 1000f;        // 水的静止密度
@@ -128,8 +131,8 @@ public class ParticleControllerGPU : MonoBehaviour
     [Header("Settings")]
     public int boundaryLayers = 4;              // 边界层数
     public float spacingParameter = 1.8f;       // 粒子间距参数，影响粒子分布密度 (边界粒子)
-    protected int targetParticleCount;          // 目标粒子数
-    internal int actualParticleCount;            // 实际总粒子数
+    private int targetParticleCount;          	// 目标粒子数
+    private int actualParticleCount;            // 实际总粒子数
     private int paddedParticleCount;            // Bitonic Sort 要求 2^n，因此必须填补未满的粒子数量
     public Vector3 spawnVolumeCenter = Vector3.zero;
     public Vector3 spawnVolumeSize;
@@ -139,10 +142,10 @@ public class ParticleControllerGPU : MonoBehaviour
     
     [Header("Rendering Settings (Unavailable if using SSF)")]
     public Material particleMaterial;
-    protected float particleRenderScale;
+    private float particleRenderScale;
     
     // Kernel Constant (核函数常数)
-    internal float poly6Constant;
+    private float poly6Constant;
     private float spikyGradientConstant;
     private float viscosityLaplacianConstant;
     
@@ -393,7 +396,14 @@ public class ParticleControllerGPU : MonoBehaviour
         bitonicSortShader.SetInt(NumEntries, paddedParticleCount);
         
         csInteractKernelID = particleComputeShader.FindKernel("CSInteract");
-        particleEffectorBuffer = new ComputeBuffer(10, Marshal.SizeOf<ParticleEffectorInfo>());
+        int maxEffectors = 10; // 假设场景中最多有10个交互物体
+        particleEffectorBuffer = new ComputeBuffer(maxEffectors, Marshal.SizeOf<ParticleEffectorInfo>());
+        particleEffectorForcesBackBuffer = new ComputeBuffer(maxEffectors * 6, sizeof(float));
+        effectorForcesReadback = new float[maxEffectors * 6];
+        
+        particleComputeShader.SetBuffer(csInteractKernelID, Particles, particleBuffer);
+        particleComputeShader.SetBuffer(csInteractKernelID, Effectors, particleEffectorBuffer);
+        particleComputeShader.SetBuffer(csInteractKernelID, EffectorForces, particleEffectorForcesBackBuffer);
         
         // 粒子渲染部分
         propertiesBuffer = new ComputeBuffer(actualParticleCount, Marshal.SizeOf(typeof(MeshProperties)), ComputeBufferType.Structured);
@@ -443,20 +453,39 @@ public class ParticleControllerGPU : MonoBehaviour
         particleComputeShader.Dispatch(csForceKernelID, numGroupsX_SPH, 1, 1);
         
         List<ParticleEffector> effectors = SimulationGlobalStatus.Instance.ParticleEffectors;
-        if (effectors.Count > 0 && csInteractKernelID >= 0)
+        if (effectors.Count > 0)
         {
             ParticleEffectorInfo[] effectorData = new ParticleEffectorInfo[effectors.Count];
-            for(int i = 0; i < effectors.Count; i++)
+            for (int i = 0; i < effectors.Count; i++)
             {
                 effectorData[i] = effectors[i].GetEffectorInfo();
             }
             particleEffectorBuffer.SetData(effectorData, 0, 0, effectors.Count);
 
+            System.Array.Clear(effectorForcesReadback, 0, effectorForcesReadback.Length);
+            effectorForcesReadback.Initialize();
+            particleEffectorForcesBackBuffer.SetData(effectorForcesReadback);
+
             particleComputeShader.SetInt(EffectorCount, effectors.Count);
-            particleComputeShader.SetBuffer(csInteractKernelID, Particles, particleBuffer);
-            particleComputeShader.SetBuffer(csInteractKernelID, Effectors, particleEffectorBuffer);
-        
             particleComputeShader.Dispatch(csInteractKernelID, numGroupsX_SPH, 1, 1);
+
+            particleEffectorForcesBackBuffer.GetData(effectorForcesReadback);
+
+            for (int i = 0; i < effectors.Count; i++)
+            {
+                int baseIndex = i * 6;
+                Vector3 force = new Vector3(
+                    effectorForcesReadback[baseIndex + 0],
+                    effectorForcesReadback[baseIndex + 1],
+                    effectorForcesReadback[baseIndex + 2]
+                );
+                Vector3 torque = new Vector3(
+                    effectorForcesReadback[baseIndex + 3],
+                    effectorForcesReadback[baseIndex + 4],
+                    effectorForcesReadback[baseIndex + 5]
+                );
+                effectors[i].ApplyForces(force, torque);
+            }
         }
         
         particleComputeShader.Dispatch(csIntegrateKernelID, numGroupsX_SPH, 1, 1);
@@ -469,7 +498,6 @@ public class ParticleControllerGPU : MonoBehaviour
     {
         int N = paddedParticleCount;
         if (N <= 1) return;
-
         int logN = (int)Mathf.Log(N, 2);
 
         for (int level = 0; level < logN; level++)
@@ -481,7 +509,6 @@ public class ParticleControllerGPU : MonoBehaviour
                 bitonicSortShader.Dispatch(csSortKernelID, numGroups, 1, 1);
             }
         }
-        // CheckSortResult(); 
     }
     
     protected virtual void LateUpdate()
@@ -526,6 +553,8 @@ public class ParticleControllerGPU : MonoBehaviour
         gridInfoBuffer = null;
         particleEffectorBuffer?.Release();
         particleEffectorBuffer = null;
+        particleEffectorForcesBackBuffer?.Release();
+        particleEffectorForcesBackBuffer = null;
     }
 
     #region Debug

@@ -15,9 +15,7 @@
 #pragma kernel CSBuildGridInfo
 // 哈希网格清除内核
 #pragma kernel CSClearGridInfo
-// 交互：采样点密度计算内核
-#pragma kernel CSCalculateDensityAtPoints
-// 交互：反作用力计算内核
+// 交互
 #pragma kernel CSInteract
 
 /// 粒子结构
@@ -81,20 +79,21 @@ struct MeshProperties
 RWStructuredBuffer<MeshProperties> _Properties;
 float _ParticleRenderScale;
 
-/// 交互：采样点结构
-RWStructuredBuffer<float> _DensitiesResult;
-StructuredBuffer<float3> _SamplePointsWorld;
-
 /// 交互：物体效应器结构
 struct EffectorInfo
 {
+    float4x4 localToWorldMatrix;
+    float4x4 worldToLocalMatrix;
+    float3 linearVelocity;
+    float3 angularVelocity;
     float3 center;
     float3 size;
-    float4x4 worldToLocalMatrix;
     float stiffness;
+    float viscosity;
 };
 
 StructuredBuffer<EffectorInfo> _Effectors;
+RWStructuredBuffer<uint> _EffectorForces;
 int _EffectorCount;
 
 /// 常用函数
@@ -141,40 +140,33 @@ uint GetGridHashFromCoords(int3 cellCoords)
 }
 
 // 处理 Box 碰撞
-void HandleBoxCollision(float3 particlePos, EffectorInfo box, out float penetration, out float3 normal)
+void HandleBoxBoundary(inout float3 particleAccel, float3 particleVel, float3 particlePos, EffectorInfo box)
 {
     float3 localPos = mul(box.worldToLocalMatrix, float4(particlePos, 1.0)).xyz;
-    
-    float3 halfSize = box.size * 0.5;
+    float3 halfSize = box.size * 0.5f;
+        
     float3 d = abs(localPos) - halfSize;
-
-    if (d.x > 0 || d.y > 0 || d.z > 0)
-    {
-        penetration = 0;
-        normal = float3(0,0,0);
-        return;
+    if (d.x > 0 || d.y > 0 || d.z > 0) return;
+    
+    float penetration = d.x;
+    float3 localNormal = float3(sign(-localPos.x), 0, 0);
+    if (d.y > penetration) { penetration = d.y; localNormal = float3(0, sign(-localPos.y), 0); }
+    if (d.z > penetration) { penetration = d.z; localNormal = float3(0, 0, sign(-localPos.z)); }
+    
+    float3 worldNormal = normalize(mul((float3x3)transpose(box.worldToLocalMatrix), localNormal));
+    
+    // 排斥力
+    float3 repulsionForce = box.stiffness * abs(penetration) * worldNormal;
+    particleAccel += repulsionForce / _ParticleMass;
+    
+    // 阻尼力
+    float3 v_rel = particleVel - (box.linearVelocity + cross(box.angularVelocity, particlePos - box.center));
+    float vn = dot(v_rel, worldNormal);
+    if (vn < 0) {
+        float3 dampingAccel = -box.viscosity * vn * worldNormal;
+        particleAccel += dampingAccel;
     }
-
-    float penetration_depth = d.x;
-    float3 local_normal = float3(sign(-localPos.x), 0, 0);
-
-    if (d.y > penetration_depth)
-    {
-        penetration_depth = d.y;
-        local_normal = float3(0, sign(-localPos.y), 0);
-    }
-    if (d.z > penetration_depth)
-    {
-        penetration_depth = d.z;
-        local_normal = float3(0, 0, sign(-localPos.z));
-    }
-
-    penetration = abs(penetration_depth);
-
-    normal = mul((float3x3)transpose(box.worldToLocalMatrix), local_normal);
-    normal = normalize(normal);
 }
-
 
 /// 内核函数
 // 密度计算函数
@@ -320,32 +312,52 @@ void CSComputeForce (uint3 id : SV_DispatchThreadID)
     _Particles[i].acceleration += _Gravity;
 }
 
+void InterlockedAddFloat(RWStructuredBuffer<uint> buffer, uint address, float value)
+{
+    uint initialValue, readbackValue;
+    do
+    {
+        initialValue = buffer[address];
+        uint computedValue = asuint(asfloat(initialValue) + value);
+        InterlockedCompareExchange(buffer[address], initialValue, computedValue, readbackValue);
+    } while (initialValue != readbackValue);
+}
+
 [numthreads(64,1,1)]
 void CSInteract (uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
-    if (i >= _ActualParticleCount) return;
+    if (i >= _ActualParticleCount || _Particles[i].type == 1) return;
 
-    if (_Particles[i].type == 1) return;
+    float3 pos_i = _Particles[i].position;
+    float3 vel_i = _Particles[i].velocity;
 
-    float3 particlePos = _Particles[i].position;
-
-    for (int j = 0; j < _EffectorCount; j++)
+    for (int effectorIdx = 0; effectorIdx < _EffectorCount; effectorIdx++)
     {
-        EffectorInfo effector = _Effectors[j];
-        
-        float penetration = 0;
-        float3 normal = float3(0,0,0);
+        EffectorInfo effector = _Effectors[effectorIdx];
 
-        HandleBoxCollision(particlePos, effector, penetration, normal);
+        float3 accelOnParticle = float3(0,0,0);
+        HandleBoxBoundary(accelOnParticle, vel_i, pos_i, effector);
 
-        if (penetration > 0)
+        // 实际发生交互
+        if (dot(accelOnParticle, accelOnParticle) > 1e-9)
         {
-            float3 repulsionForce = effector.stiffness * penetration * normal;
-            
-            float3 accelerationFromBoundary = repulsionForce / _ParticleMass;
+            _Particles[i].acceleration += accelOnParticle;
 
-            _Particles[i].acceleration += accelerationFromBoundary;
+            float3 forceOnEffector = -_ParticleMass * accelOnParticle;
+
+            float3 r = pos_i - effector.center;
+            float3 torqueOnEffector = cross(r, forceOnEffector);
+
+            int baseIndex = effectorIdx * 6;
+
+            InterlockedAddFloat(_EffectorForces, baseIndex + 0, forceOnEffector.x);
+            InterlockedAddFloat(_EffectorForces, baseIndex + 1, forceOnEffector.y);
+            InterlockedAddFloat(_EffectorForces, baseIndex + 2, forceOnEffector.z);
+
+            InterlockedAddFloat(_EffectorForces, baseIndex + 3, torqueOnEffector.x);
+            InterlockedAddFloat(_EffectorForces, baseIndex + 4, torqueOnEffector.y);
+            InterlockedAddFloat(_EffectorForces, baseIndex + 5, torqueOnEffector.z);
         }
     }
 }
@@ -432,23 +444,20 @@ void CSBuildGridInfo (uint3 id : SV_DispatchThreadID)
     if (i >= _ActualParticleCount) return;
 
     uint current_hash = _ParticleHashes[i].hash;
-    if (current_hash == 0xFFFFFFFF) return; // 忽略填充粒子
+    if (current_hash == 0xFFFFFFFF) return;
 
     uint prev_hash = (i == 0) ? 0xFFFFFFFF : _ParticleHashes[i - 1].hash;
-    
-    // 检查 i+1 是否越界
-    uint next_hash = 0xFFFFFFFF; // 默认为无效值
+
+    uint next_hash = 0xFFFFFFFF;
     if (i < _ActualParticleCount - 1) {
         next_hash = _ParticleHashes[i + 1].hash;
     }
-    
-    // 当前哈希的开始
+
     if (current_hash != prev_hash)
     {
         _GridInfo[current_hash].start = i;
     }
 
-    // 当前哈希的结束
     if (current_hash != next_hash)
     {
         _GridInfo[current_hash].end = i + 1;
@@ -482,54 +491,3 @@ void CSBuildMatrices(uint id : SV_DispatchThreadID)
     );
     _Properties[id].mat = mat;
 }
-
-// 交互：采样点计算函数
-[numthreads(64,1,1)]
-void CSCalculateDensityAtPoints(uint3 id : SV_DispatchThreadID)
-{
-    uint i = id.x;
-
-    uint numSamplePoints;
-    _DensitiesResult.GetDimensions(numSamplePoints, numSamplePoints);
-    if (i >= numSamplePoints) return;
-
-    float3 samplePointPos = _SamplePointsWorld[i];
-    float density = 0.0f;
-
-    int3 cellCoords = (int3)floor((samplePointPos - _GridMin) / _GridCellSize);
-    
-    for (int dz = -1; dz <= 1; ++dz)
-    {
-        for (int dy = -1; dy <= 1; ++dy)
-        {
-            for (int dx = -1; dx <= 1; ++dx)
-            {
-                int3 cell_n_coords = cellCoords + int3(dx, dy, dz);
-                uint hash_n = GetGridHashFromCoords(cell_n_coords);
-                
-                GridInfo info = _GridInfo[hash_n];
-                uint start_idx = info.start;
-                uint end_idx = info.end;
-                
-                if (start_idx != 0xFFFFFFFF && end_idx > start_idx)
-                {
-                    for (uint k_n = start_idx; k_n < end_idx; ++k_n)
-                    {
-                        uint j = _ParticleHashes[k_n].index;
-
-                        float3 positionVector_ij = _Particles[j].position - samplePointPos;
-                        float radiusSquared = dot(positionVector_ij, positionVector_ij);
-
-                        if (radiusSquared < _HSquared)
-                        {
-                            density += _ParticleMass * Poly6Kernel(radiusSquared);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    _DensitiesResult[i] = density;
-}
-
