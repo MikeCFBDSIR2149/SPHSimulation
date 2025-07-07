@@ -169,7 +169,7 @@ Shader "Custom/SSF_WaterShading"
                 float2 sceneUV = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
                 
                 // 基于法线和深度进行扭曲
-                float2 refractOffset = worldNormal.xy * _RefractionStrength * (1.0 - fluid_reversed_ndcDepth); // 深度越大，折射越小
+                float2 refractOffset = worldNormal.xy * _RefractionStrength;
                 half4 refractionColor = SAMPLE_TEXTURE2D(_CameraOpaqueTexture, sampler_LinearClamp, sceneUV + refractOffset);
 
                 // 水体自身颜色 (基于厚度)
